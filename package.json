@@ -1,0 +1,24 @@
+{
+  "name": "lore-story-platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "lint": "eslint .",
+    "test": "node --test",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "^147.0.0",
+    "playwright": "^1.63.0",
+    "wrangler": "^4.86.0"
+  }
+}
