@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { CALLSIGNS, createMissionRepository, isParticipantConnected, missionErrorMessage, PRESENCE_TIMEOUT_MS, readyCount } from '../src/mission.js'
+import { CALLSIGNS, createLiveController, createMissionRepository, isParticipantConnected, missionErrorMessage, PRESENCE_TIMEOUT_MS, readyCount } from '../src/mission.js'
 
 function clientMock() {
   const calls = []
@@ -51,4 +51,20 @@ test('migration declares narrow RPC-only writes, completed guards and collision 
   const sql = await readFile(new globalThis.URL('../supabase/migrations/202609150001_story_mode_stage_1.sql', import.meta.url), 'utf8')
   for (const fragment of ["security definer set search_path=''", 'for attempt in 1..8 loop', 'OPEN_SESSION_EXISTS', "mission_status='completed'", 'MISSION_COMPLETED', 'own_participant_select', 'remove_mission_participant', 'grant select(id,session_id,callsign,status', 'loreboards_confirmed_teacher_insert', 'alter publication supabase_realtime']) assert.match(sql, new RegExp(fragment.replace(/[()]/g, '\\$&'), 'i'))
   assert.doesNotMatch(sql, /grant select,update on public\.mission_participants/i)
+})
+
+test('live controller clears heartbeat and channel exactly once on removal, completion or unmount', () => {
+  for (const reason of ['removal', 'completion', 'unmount']) {
+    const removed = []; const cleared = []; const controller = createLiveController(channel => removed.push(channel), timer => cleared.push(timer))
+    controller.replace(`${reason}-channel`, `${reason}-timer`)
+    controller.stop(); controller.stop()
+    assert.deepEqual(removed, [`${reason}-channel`])
+    assert.deepEqual(cleared, [`${reason}-timer`])
+  }
+})
+test('replacing a live connection cleans only the old resources and retains the new pair', () => {
+  const removed = []; const cleared = []; const controller = createLiveController(channel => removed.push(channel), timer => cleared.push(timer))
+  controller.replace('old-channel', 'old-timer'); controller.replace('new-channel', 'new-timer')
+  assert.deepEqual(removed, ['old-channel']); assert.deepEqual(cleared, ['old-timer'])
+  controller.stop(); assert.deepEqual(removed, ['old-channel', 'new-channel']); assert.deepEqual(cleared, ['old-timer', 'new-timer'])
 })

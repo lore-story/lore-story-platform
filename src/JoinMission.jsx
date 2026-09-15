@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, Radio, Rocket, Wifi, WifiOff } from 'lucide-react'
-import { HEARTBEAT_INTERVAL_MS, missionErrorMessage } from './mission'
+import { createLiveController, HEARTBEAT_INTERVAL_MS, missionErrorMessage } from './mission'
 
 export default function JoinMission({ supabase, code }) {
   const normalized = code.trim().toUpperCase()
@@ -10,15 +10,17 @@ export default function JoinMission({ supabase, code }) {
   const [message, setMessage] = useState('')
   const [online, setOnline] = useState(window.navigator.onLine)
   const [teacherBrowser, setTeacherBrowser] = useState(false)
-  const channelCleanup = useRef(() => {})
-  const heartbeatCleanup = useRef(() => {})
+  const liveController = useRef(null)
+  if (!liveController.current) liveController.current = createLiveController(channel => supabase.removeChannel(channel), timer => window.clearInterval(timer))
   const autoReconnectAttempted = useRef(false)
 
+  const stopLive = useCallback(() => liveController.current.stop(), [])
+
   const showRemoved = useCallback(() => {
-    heartbeatCleanup.current()
+    stopLive()
     setMessage(missionErrorMessage({ message: 'PARTICIPANT_REMOVED' }))
     setScreen('removed')
-  }, [])
+  }, [stopLive])
 
   const inspect = useCallback(async ({ preserveMessage = false } = {}) => {
     if (!preserveMessage) setMessage('')
@@ -53,29 +55,23 @@ export default function JoinMission({ supabase, code }) {
     }
   }, [normalized, showRemoved, supabase])
 
-  const stopLive = useCallback(() => {
-    heartbeatCleanup.current()
-    channelCleanup.current()
-  }, [])
-
   const startLive = useCallback((joined) => {
     stopLive()
     const heartbeat = async connected => {
       const { error } = await supabase.rpc('update_my_mission_presence', { p_session_id: joined.session_id, p_connected: connected, p_ready: null })
       if (error?.message === 'PARTICIPANT_REMOVED') showRemoved()
-      if (error?.message === 'MISSION_COMPLETED') heartbeatCleanup.current()
+      if (error?.message === 'MISSION_COMPLETED') stopLive()
     }
     heartbeat(true)
     const timer = window.setInterval(() => heartbeat(true), HEARTBEAT_INTERVAL_MS)
-    heartbeatCleanup.current = () => window.clearInterval(timer)
     const channel = supabase.channel(`student:${joined.session_id}:${joined.participant_id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mission_sessions', filter: `id=eq.${joined.session_id}` }, payload => {
       setInfo(current => ({ ...current, ...payload.new }))
-      if (payload.new.status === 'completed') heartbeatCleanup.current()
+      if (payload.new.status === 'completed') stopLive()
     }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mission_participants', filter: `id=eq.${joined.participant_id}` }, payload => {
       if (payload.new.status === 'removed') showRemoved()
       else setInfo(current => ({ ...current, ready_scene_id: payload.new.ready_scene_id }))
     }).subscribe(status => setOnline(status === 'SUBSCRIBED'))
-    channelCleanup.current = () => supabase.removeChannel(channel)
+    liveController.current.replace(channel, timer)
   }, [showRemoved, stopLive, supabase])
 
   const join = useCallback(async callsign => {
@@ -99,7 +95,7 @@ export default function JoinMission({ supabase, code }) {
       await inspect({ preserveMessage: true })
       setMessage(errorMessage)
     }
-  }, [inspect, normalized, showRemoved, startLive, supabase])
+  }, [inspect, normalized, showRemoved, supabase])
 
   useEffect(() => {
     inspect().then(inspected => {

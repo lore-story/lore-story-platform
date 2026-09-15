@@ -221,5 +221,3 @@ try {
 } finally {
   await browser.close()
 }
-
-await import('./mission-e2e.mjs')

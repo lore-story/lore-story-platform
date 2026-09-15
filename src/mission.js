@@ -2,6 +2,26 @@ export const STORY_SLUG = 'lore-astra-notruf-aus-dem-all'
 export const STORY_TITLE = 'Notruf aus dem All'
 export const HEARTBEAT_INTERVAL_MS = 25_000
 export const PRESENCE_TIMEOUT_MS = 70_000
+export function createLiveController(removeChannel, clearTimer) {
+  let channel = null
+  let timer = null
+  return {
+    replace(nextChannel, nextTimer) {
+      this.stop()
+      channel = nextChannel
+      timer = nextTimer
+    },
+    stop() {
+      const activeChannel = channel
+      const activeTimer = timer
+      channel = null
+      timer = null
+      if (activeTimer !== null) clearTimer(activeTimer)
+      if (activeChannel !== null) removeChannel(activeChannel)
+    },
+  }
+}
+
 export const CALLSIGNS = Object.freeze(['Astrofuchs','Blitzbär','Cosmo','Dämmerfalke','Echowolf','Flinkstern','Funkelfisch','Galaxie','Himmelsluchs','Ionenigel','Komet','Lichtlöwe','Meteor','Mondmotte','Nebelpanda','Nova','Orbit','Polarstern','Quasar','Rakete','Saturn','Sirius','Solaris','Sternenhirsch','Sternenkatze','Supernova','Titan','Umlauf','Vega','Weltraumwal'])
 
 export const missionErrorMessage = error => ({
