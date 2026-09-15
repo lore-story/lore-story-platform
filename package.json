@@ -11,9 +11,11 @@
     "test:e2e": "node tests/e2e.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "tslib": "^2.8.1",
     "vite": "latest"
   },
   "devDependencies": {
