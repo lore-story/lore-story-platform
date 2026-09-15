@@ -14,6 +14,7 @@ const browser = await chromium.launch({
 async function installSupabaseMock(page) {
   await page.addInitScript(() => {
     const listeners = new Set()
+    window.__e2eCloudUpdates = 0
     const user = { id: 'e2e-user', email: 'teacher@example.test' }
     let session = localStorage.getItem('e2e-session') ? { user, access_token: 'mock' } : null
     const notify = event => listeners.forEach(listener => listener(event, session))
@@ -24,6 +25,7 @@ async function installSupabaseMock(page) {
         if (operation === 'select') return { data: row, error: null }
         if (operation === 'insert') { row={ id:'board-1', state:q.payload.state, updated_at:new Date().toISOString() }; localStorage.setItem('e2e-cloud-row',JSON.stringify(row)); return {data:row,error:null} }
         if (!row || (q.filters.updated_at && q.filters.updated_at !== row.updated_at)) return {data:null,error:null}
+        window.__e2eCloudUpdates += 1
         row={...row,state:q.payload.state,updated_at:new Date(Date.now()+1).toISOString()};localStorage.setItem('e2e-cloud-row',JSON.stringify(row));return {data:{updated_at:row.updated_at},error:null}
       }
       return q
@@ -127,9 +129,16 @@ try {
   await desktop.getByLabel('Timer Minuten').fill('0')
   await desktop.getByLabel('Timer Sekunden').fill('5')
   await desktop.getByRole('button', { name: 'Timer übernehmen' }).click()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   await desktop.getByRole('button', { name: 'Starten', exact: true }).click()
   await desktop.getByText('Timer läuft').waitFor()
-  await desktop.waitForTimeout(1200)
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
+  const updatesAfterStart = await desktop.evaluate(() => window.__e2eCloudUpdates)
+  const initialDisplay = await desktop.locator('.timer-widget > strong').innerText()
+  await desktop.waitForTimeout(2100)
+  assert.notEqual(await desktop.locator('.timer-widget > strong').innerText(), initialDisplay)
+  assert.equal(await desktop.evaluate(() => window.__e2eCloudUpdates), updatesAfterStart)
+  assert.equal(await desktop.locator('.save-status').innerText(), 'Online gespeichert')
   await desktop.reload({ waitUntil: 'networkidle' })
   await desktop.getByText('Timer läuft').waitFor()
   assert.ok(Number((await desktop.locator('.timer-widget > strong').innerText()).split(':')[1]) <= 4)
@@ -141,8 +150,25 @@ try {
   await desktop.waitForTimeout(1100)
   assert.equal(await desktop.locator('.timer-widget > strong').innerText(), pausedTime)
   await desktop.getByRole('button', { name: 'Fortsetzen' }).click()
+  await desktop.getByText('Speichert …', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
+  const updatesAfterResume = await desktop.evaluate(() => window.__e2eCloudUpdates)
   await desktop.getByRole('button', { name: 'Zurücksetzen' }).click()
+  await desktop.getByText('Speichert …', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
+  assert.equal(await desktop.evaluate(() => window.__e2eCloudUpdates), updatesAfterResume + 1)
   assert.match(await desktop.locator('.timer-widget > strong').innerText(), /00:05/)
+  await desktop.getByRole('button', { name: /Timer-Einstellungen/ }).click()
+  await desktop.getByLabel('Timer Sekunden').fill('1')
+  await desktop.getByRole('button', { name: 'Timer übernehmen' }).click()
+  await desktop.getByText('Speichert …', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
+  await desktop.getByRole('button', { name: 'Starten', exact: true }).click()
+  await desktop.getByText('Zeit ist um').waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
+  const updatesAfterExpiry = await desktop.evaluate(() => window.__e2eCloudUpdates)
+  await desktop.waitForTimeout(1200)
+  assert.equal(await desktop.evaluate(() => window.__e2eCloudUpdates), updatesAfterExpiry)
   await desktop.getByLabel('Aktive Lorestory').selectOption('moosarchiv')
   assert.equal(await desktop.getByLabel('Aktive Lorestory').inputValue(), 'moosarchiv')
   await desktop.getByRole('button', { name: 'Storymodus öffnen' }).click()

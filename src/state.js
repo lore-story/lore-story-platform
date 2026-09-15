@@ -31,6 +31,11 @@ export const DEFAULT_TIMER = Object.freeze({
   targetAt: null,
 })
 
+export function timerRemaining(timer, now = Date.now()) {
+  if (timer.status !== 'running' || !Number.isFinite(timer.targetAt)) return timer.remaining
+  return Math.max(0, Math.ceil((timer.targetAt - now) / 1000))
+}
+
 export function readMaterials(storage) {
   try {
     const saved = JSON.parse(storage.getItem('lore-materials'))
