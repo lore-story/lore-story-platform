@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, Circle, CirclePlay, Clock3, Compass, Feather, Gem, Library, ListChecks, LogOut, Maximize, Menu, PenLine, Pause, Play, Plus, RotateCcw, Save, Search, Settings2, Trash2, ShoppingBag, Sparkles, TimerReset, WandSparkles, X } from 'lucide-react'
 import { stories, worlds } from './data'
-import { addStoryToFundus, readMaterials, readState, restoreTimer } from './state'
+import { addStoryToFundus, readState } from './state'
+import { createLoreboardRepository, DEFAULT_LOREBOARD_STATE, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from './loreboardRepository'
 
 function App() {
   const [initial] = useState(() => readState(localStorage))
@@ -50,78 +51,64 @@ function Platform(props) {
 function PageHead({ kicker,title,copy,action }) { return <div className="page-head"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{copy}</p></div>{action}</div> }
 function Overview({fundus,activeStory,setActiveStory,setView,activeWorld,notify}) { const available=stories.filter(s=>fundus.includes(s.id)); const story=stories.find(s=>s.id===activeStory)||available[0]; const world=worlds.find(w=>w.id===activeWorld); return <><PageHead kicker="GUTEN MORGEN, LEA" title="Deine Übersicht" copy="Deine persönliche Werkstatt mit Stories, Sammlung und Schnellzugriffen." action={<button className="btn dark" onClick={()=>setView('loreboard')}><CirclePlay size={17}/> Loreboard öffnen</button>}/><div className="active-banner" style={{'--accent':world.colors[0]}}><div className="banner-copy"><span className="status"><i/> AKTIVE STORY</span><small>{world.name} · {story.subject}</small><h2>{story.title}</h2><p>{story.description}</p><div className="progress-row"><span>Dein Fortschritt</span><b>Kapitel 2 / {story.chapters}</b></div><div className="progress"><i style={{width:`${200/story.chapters}%`}}/></div><div className="banner-actions"><button className="btn gold" onClick={()=>setView('loreboard')}><CirclePlay size={18}/> Im Loreboard starten</button><button className="btn glass" onClick={()=>setView('werkstatt')}><PenLine size={17}/> Bearbeiten</button></div></div><div className="banner-symbol">{world.icon}</div></div><section className="dashboard-section"><div className="section-title"><div><h3>Aus deinem Fundus</h3><p>Wähle eine aktive Story für dein Loreboard.</p></div><button onClick={()=>setView('fundus')}>Alle anzeigen <ArrowRight size={16}/></button></div><div className="story-row">{available.map(s=><StoryCard key={s.id} story={s} active={s.id===activeStory} action={()=>{setActiveStory(s.id);notify('Story für das Loreboard aktiviert')}}/>)}</div></section></> }
 
+function EditorDialog({ title, children, onClose }) {
+  return <div className="board-dialog-backdrop" role="presentation" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><section className="board-dialog" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button aria-label={`${title} schließen`} onClick={onClose}><X/></button></header>{children}</section></div>
+}
+
 function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setView }) {
+  const repository = useState(() => createLoreboardRepository())[0]
   const available = stories.filter(story => fundus.includes(story.id))
-  const story = stories.find(item => item.id === activeStory) || available[0]
-  const world = worlds.find(item => item.id === activeWorld)
+  const [board, setBoard] = useState(() => ({ ...DEFAULT_LOREBOARD_STATE, activeStory, activeWorld }))
+  const [loaded, setLoaded] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('')
   const [now, setNow] = useState(new Date())
-  const [assignment, setAssignment] = useState(() => localStorage.getItem('lore-assignment') || 'Findet heraus, wie Lebewesen im Wald miteinander verbunden sind.')
-  const [assignmentDraft, setAssignmentDraft] = useState(assignment)
-  const [editingAssignment, setEditingAssignment] = useState(false)
-  const [materials, setMaterials] = useState(() => readMaterials(localStorage))
-  const [materialDraft, setMaterialDraft] = useState(materials)
-  const [editingMaterials, setEditingMaterials] = useState(false)
-  const [route, setRoute] = useState(() => { try { const saved = JSON.parse(localStorage.getItem('lore-route')); return Array.isArray(saved) && saved.length ? saved : ['Ankommen', 'Entdecken', 'Vertiefen', 'Teilen'] } catch { return ['Ankommen', 'Entdecken', 'Vertiefen', 'Teilen'] } })
-  const [routeDraft, setRouteDraft] = useState(route)
-  const [editingRoute, setEditingRoute] = useState(false)
-  const [activeRoute, setActiveRoute] = useState(() => Math.max(0, Number(localStorage.getItem('lore-active-phase')) || 0))
-  const [initialTimer] = useState(() => restoreTimer(localStorage))
-  const [minutes, setMinutes] = useState(Math.floor(initialTimer.duration / 60))
-  const [seconds, setSeconds] = useState(initialTimer.duration % 60)
-  const [timer, setTimer] = useState(initialTimer)
+  const [dialog, setDialog] = useState(null)
+  const [assignmentDraft, setAssignmentDraft] = useState('')
+  const [materialDraft, setMaterialDraft] = useState([])
+  const [routeDraft, setRouteDraft] = useState([])
+  const [materialLimit, setMaterialLimit] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [minutes, setMinutes] = useState(10)
+  const [seconds, setSeconds] = useState(0)
   const [storyNotice, setStoryNotice] = useState(false)
 
-  useEffect(() => { const clock = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(clock) }, [])
-  useEffect(() => {
-    if (timer.status !== 'running') return undefined
-    const tick = () => setTimer(current => {
-      const remaining = Math.max(0, Math.ceil((current.targetAt - Date.now()) / 1000))
-      return remaining ? { ...current, remaining } : { ...current, remaining: 0, status: 'expired', targetAt: null }
-    })
-    tick()
-    const countdown = window.setInterval(tick, 250)
-    return () => window.clearInterval(countdown)
-  }, [timer.status])
-  useEffect(() => { localStorage.setItem('lore-timer', JSON.stringify(timer)) }, [timer])
-  useEffect(() => {
-    const safePhase = Math.min(activeRoute, route.length - 1)
-    if (safePhase !== activeRoute) setActiveRoute(safePhase)
-    localStorage.setItem('lore-active-phase', String(safePhase))
-  }, [activeRoute, route.length])
+  useEffect(() => { let active=true; repository.load().then(saved=>{ if(!active)return; const next={...saved,activeStory:saved.activeStory||activeStory,activeWorld:saved.activeWorld||activeWorld}; setBoard(next); setMinutes(Math.floor(next.timer.duration/60)); setSeconds(next.timer.duration%60); setActiveStory(next.activeStory); setLoaded(true) }).catch(()=>{ if(active){setSaveStatus('Speichern fehlgeschlagen');setLoaded(true)} }); return()=>{active=false} }, [repository])
+  useEffect(() => { if (!loaded) return undefined; setSaveStatus('Speichert …'); const pending=window.setTimeout(()=>repository.save(board).then(()=>setSaveStatus('Gespeichert')).catch(()=>setSaveStatus('Speichern fehlgeschlagen')),180); return()=>window.clearTimeout(pending) }, [board, loaded, repository])
+  useEffect(() => { const clock=window.setInterval(()=>setNow(new Date()),1000); return()=>window.clearInterval(clock) }, [])
+  useEffect(() => { if(board.timer.status!=='running') return undefined; const tick=()=>setBoard(current=>{const remaining=Math.max(0,Math.ceil((current.timer.targetAt-Date.now())/1000));return {...current,timer:remaining?{...current.timer,remaining}:{...current.timer,remaining:0,status:'expired',targetAt:null}}}); tick(); const id=window.setInterval(tick,250); return()=>window.clearInterval(id) }, [board.timer.status])
 
-  const saveAssignment = () => { const clean = assignmentDraft.trim(); if (!clean) return; localStorage.setItem('lore-assignment', clean); setAssignment(clean); setAssignmentDraft(clean); setEditingAssignment(false) }
-  const cancelAssignment = () => { setAssignmentDraft(assignment); setEditingAssignment(false) }
-  const saveRoute = () => { const clean = routeDraft.map(item => item.trim()).filter(Boolean); if (!clean.length) return; localStorage.setItem('lore-route', JSON.stringify(clean)); setRoute(clean); setRouteDraft(clean); setActiveRoute(value => Math.min(value, clean.length - 1)); setEditingRoute(false) }
-  const cancelRoute = () => { setRouteDraft(route); setEditingRoute(false) }
-  const saveMaterials = () => { const clean = materialDraft.map(item => item.trim()).filter(Boolean); localStorage.setItem('lore-materials', JSON.stringify(clean)); setMaterials(clean); setMaterialDraft(clean); setEditingMaterials(false) }
-  const cancelMaterials = () => { setMaterialDraft(materials); setEditingMaterials(false) }
-  const moveMaterial = (index, direction) => setMaterialDraft(current => { const target = index + direction; if (target < 0 || target >= current.length) return current; const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next })
-  const timerValue = () => Math.max(0, Number(minutes) * 60 + Number(seconds))
-  const resetTimer = () => { const duration = timerValue(); setTimer({ duration, remaining: duration, status: 'ready', startedAt: null, targetAt: null }) }
-  const startTimer = () => { const remaining = timer.remaining <= 0 ? timer.duration : timer.remaining; if (remaining <= 0) return; const startedAt = Date.now(); setTimer(current => ({ ...current, remaining, status: 'running', startedAt, targetAt: startedAt + remaining * 1000 })) }
-  const toggleTimer = () => setTimer(current => current.status === 'running' ? { ...current, status: 'paused', targetAt: null } : { ...current, status: 'running', startedAt: Date.now(), targetAt: Date.now() + current.remaining * 1000 })
-  const toggleFullscreen = async () => { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); else await document.exitFullscreen() }
-  const time = `${String(Math.floor(timer.remaining / 60)).padStart(2, '0')}:${String(timer.remaining % 60).padStart(2, '0')}`
-  const timerStatus = { ready: 'Bereit', running: 'Timer läuft', paused: 'Pausiert', expired: 'Zeit ist um' }[timer.status]
+  const update = patch => { setSaveStatus('Speichert …'); setBoard(current=>({...current,...patch})) }
+  const openAssignment=()=>{setAssignmentDraft(board.assignment);setDialog('assignment')}
+  const saveAssignment=()=>{const clean=assignmentDraft.trim();if(clean){update({assignment:clean});setDialog(null)}}
+  const openMaterials=()=>{setMaterialDraft([...board.materials]);setMaterialLimit(false);setDialog('materials')}
+  const addMaterial=()=>{if(materialDraft.length>=MAX_MATERIALS){setMaterialLimit(true);return}setMaterialDraft(current=>[...current,'Neues Material'])}
+  const saveMaterials=()=>{update({materials:materialDraft.map(x=>x.trim()).filter(Boolean).slice(0,MAX_MATERIALS)});setDialog(null)}
+  const moveMaterial=(index,direction)=>setMaterialDraft(current=>{const target=index+direction;if(target<0||target>=current.length)return current;const next=[...current];[next[index],next[target]]=[next[target],next[index]];return next})
+  const openRoute=()=>{setRouteDraft([...board.phases]);setDialog('route')}
+  const saveRoute=()=>{const phases=routeDraft.map(x=>x.trim()).filter(Boolean);if(phases.length){update({phases,activePhase:Math.min(board.activePhase,phases.length-1)});setDialog(null)}}
+  const timerValue=()=>Math.max(0,Number(minutes)*60+Number(seconds))
+  const resetTimer=()=>{const duration=timerValue();update({timer:{duration,remaining:duration,status:'ready',startedAt:null,targetAt:null}})}
+  const startTimer=()=>{setSaveStatus('Speichert …');setBoard(current=>{const remaining=current.timer.remaining<=0?current.timer.duration:current.timer.remaining;if(!remaining)return current;const startedAt=Date.now();return {...current,timer:{...current.timer,remaining,status:'running',startedAt,targetAt:startedAt+remaining*1000}}})}
+  const toggleTimer=()=>{setSaveStatus('Speichert …');setBoard(current=>{const timer=current.timer;return {...current,timer:timer.status==='running'?{...timer,status:'paused',targetAt:null}:{...timer,status:'running',startedAt:Date.now(),targetAt:Date.now()+timer.remaining*1000}}})}
+  const selectStory=value=>{setActiveStory(value);update({activeStory:value});setStoryNotice(false)}
+  const toggleFullscreen=async()=>{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}
+  const story=stories.find(item=>item.id===board.activeStory)||available[0]
+  const world=worlds.find(item=>item.id===board.activeWorld)||worlds.find(item=>item.id===activeWorld)
+  const time=`${String(Math.floor(board.timer.remaining/60)).padStart(2,'0')}:${String(board.timer.remaining%60).padStart(2,'0')}`
+  const timerStatus={ready:'Bereit',running:'Timer läuft',paused:'Pausiert',expired:'Zeit ist um'}[board.timer.status]
 
-  return <main className="loreboard-mode" style={{ '--lore-accent': world.colors[0], '--lore-deep': world.colors[1] }}>
-    <div className="lore-ambient" />
-    <header className="loreboard-topbar">
-      <div className="loreboard-brand"><span>{world.icon}</span><div><small>LOREBOARD · {world.name}</small><b>{route[activeRoute]}</b></div></div>
-      <div className="live-clock"><Clock3/><div><strong>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</strong><small>{now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })}</small></div></div>
-      <div className="loreboard-controls"><button onClick={toggleFullscreen} aria-label="Vollbild öffnen"><Maximize/> Vollbild</button><button className="exit-board" onClick={()=>setView('overview')}><ArrowLeft/> Zur Übersicht</button></div>
-    </header>
-    <section className={`route-strip ${editingRoute ? 'editing' : ''}`} aria-label="Tagesroute">
-      <div className="route-heading"><span>TAGESROUTE</span><button aria-label={editingRoute ? 'Bearbeitung der Tagesroute abbrechen' : 'Tagesroute bearbeiten'} onClick={() => editingRoute ? cancelRoute() : setEditingRoute(true)}>{editingRoute ? <X/> : <PenLine/>}</button></div>
-      {editingRoute ? <div className="route-editor">{routeDraft.map((item,index)=><div className="route-input" key={index}><i>{index+1}</i><input aria-label={`Routenpunkt ${index+1}`} value={item} onChange={event=>setRouteDraft(current=>current.map((value,itemIndex)=>itemIndex===index?event.target.value:value))}/><button aria-label={`Routenpunkt ${index+1} löschen`} onClick={()=>setRouteDraft(current=>current.filter((_,itemIndex)=>itemIndex!==index))} disabled={routeDraft.length===1}><Trash2/></button></div>)}<button className="route-add" onClick={()=>setRouteDraft(current=>[...current,'Neue Etappe'])}><Plus/> Etappe</button><button className="route-save" onClick={saveRoute}><Save/> Speichern</button></div> : <div className="route-items">{route.map((item,index)=><button className={index === activeRoute ? 'active' : ''} onClick={()=>setActiveRoute(index)} key={`${item}-${index}`} aria-pressed={index===activeRoute}><i>{index+1}</i>{item}</button>)}</div>}
-    </section>
+  return <main className="loreboard-mode" style={{'--lore-accent':world.colors[0],'--lore-deep':world.colors[1]}}>
+    <div className="lore-ambient"/><header className="loreboard-topbar"><div className="loreboard-brand"><span>{world.icon}</span><div><small>LOREBOARD · {world.name}</small><b>{board.phases[board.activePhase]}</b></div></div><div className="live-clock"><Clock3/><div><strong>{now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</strong><small>{now.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'})}</small></div></div><div className="loreboard-controls"><span className={`save-status ${saveStatus.includes('fehl')?'error':''}`} role="status">{saveStatus}</span><button onClick={toggleFullscreen} aria-label="Vollbild öffnen"><Maximize/> Vollbild</button><button className="exit-board" onClick={()=>setView('overview')}><ArrowLeft/> Zur Übersicht</button></div></header>
+    <section className="route-strip" aria-label="Tagesroute"><div className="route-heading"><span>TAGESROUTE</span><button aria-label="Tagesroute bearbeiten" onClick={openRoute}><PenLine/></button></div><div className="route-items">{board.phases.map((item,index)=><button className={index===board.activePhase?'active':''} onClick={()=>update({activePhase:index})} key={`${item}-${index}`} aria-pressed={index===board.activePhase}><i>{index+1}</i>{item}</button>)}</div></section>
     <section className="board-grid">
-      <article className="board-widget assignment-widget"><div className="widget-title"><PenLine/><span>AKTUELLER AUFTRAG</span><small><Check/> lokal gespeichert</small></div>{editingAssignment ? <><textarea autoFocus aria-label="Aktueller Auftrag bearbeiten" value={assignmentDraft} onChange={event=>setAssignmentDraft(event.target.value)}/><div className="assignment-actions"><button className="secondary-action" onClick={cancelAssignment}><X/> Abbrechen</button><button onClick={saveAssignment}><Save/> Auftrag speichern</button></div></> : <><p className="assignment-display">{assignment}</p><button onClick={()=>setEditingAssignment(true)}><PenLine/> Auftrag bearbeiten</button></>}</article>
-      <article className="board-widget timer-widget"><div className="widget-title"><TimerReset/><span>TIMER</span><small>{timerStatus}</small></div><strong>{time}</strong><div className="timer-actions"><button className="timer-start" onClick={startTimer} disabled={timer.status === 'running'}><Play/> {timer.status === 'ready' ? 'Starten' : 'Neu starten'}</button><button onClick={toggleTimer} disabled={timer.remaining <= 0 || timer.status === 'ready'}>{timer.status === 'running' ? <><Pause/> Pausieren</> : <><Play/> Fortsetzen</>}</button><button onClick={resetTimer}><RotateCcw/> Zurücksetzen</button></div><button className="settings-toggle" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(value=>!value)}><Settings2/> Timer-Einstellungen <ChevronDown/></button>{settingsOpen&&<div className="timer-settings"><label>Minuten<input aria-label="Timer Minuten" type="number" min="0" max="180" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label><label>Sekunden<input aria-label="Timer Sekunden" type="number" min="0" max="59" value={seconds} onChange={event=>setSeconds(event.target.value)}/></label><button aria-label="Timer übernehmen" onClick={resetTimer}><Check/> Übernehmen</button></div>}</article>
-      <article className="board-widget materials-widget"><div className="widget-title"><ListChecks/><span>DAS BRAUCHST DU</span>{!editingMaterials&&<button className="material-edit" onClick={()=>setEditingMaterials(true)}><PenLine/> Material bearbeiten</button>}</div>{editingMaterials ? <div className="material-editor">{materialDraft.map((item,index)=><div className="material-input" key={index}><input aria-label={`Material ${index+1}`} value={item} onChange={event=>setMaterialDraft(current=>current.map((value,itemIndex)=>itemIndex===index?event.target.value:value))}/><button aria-label={`${item} nach oben`} disabled={index===0} onClick={()=>moveMaterial(index,-1)}><ArrowUp/></button><button aria-label={`${item} nach unten`} disabled={index===materialDraft.length-1} onClick={()=>moveMaterial(index,1)}><ArrowDown/></button><button aria-label={`${item} löschen`} onClick={()=>setMaterialDraft(current=>current.filter((_,itemIndex)=>itemIndex!==index))}><Trash2/></button></div>)}<button className="material-add" onClick={()=>setMaterialDraft(current=>[...current,'Neues Material'])}><Plus/> Material hinzufügen</button><div className="material-editor-actions"><button onClick={cancelMaterials}><X/> Abbrechen</button><button onClick={saveMaterials}><Save/> Speichern</button></div></div> : <ul className="material-list">{materials.map((item,index)=><li key={`${item}-${index}`}><Circle/><span>{item}</span></li>)}</ul>}</article>
-      <article className="board-widget story-launcher"><div className="widget-title"><Sparkles/><span>AKTIVE LORESTORY</span></div><div className="story-select"><span>{world.icon}</span><select aria-label="Aktive Lorestory" value={story.id} onChange={event=>{setActiveStory(event.target.value);setStoryNotice(false)}}>{available.map(item=><option value={item.id} key={item.id}>{item.title}</option>)}</select></div><p>{story.subject} · {story.age} Jahre · {story.duration}</p><button onClick={()=>setStoryNotice(true)}><CirclePlay/> Storymodus öffnen</button>{storyNotice&&<div className="story-notice" role="status"><Sparkles/><span><b>Storymodus noch nicht angebunden</b>Die ausgewählte Story ist vorgemerkt. Der interaktive Storymodus folgt.</span></div>}</article>
+      <article className="board-widget assignment-widget"><div className="widget-title"><PenLine/><span>AKTUELLER AUFTRAG</span></div><p className="assignment-display">{board.assignment}</p><button onClick={openAssignment}><PenLine/> Auftrag bearbeiten</button></article>
+      <article className="board-widget timer-widget"><div className="widget-title"><TimerReset/><span>TIMER</span><small>{timerStatus}</small></div><strong>{time}</strong><div className="timer-actions"><button className="timer-start" onClick={startTimer} disabled={board.timer.status==='running'}><Play/> {board.timer.status==='ready'?'Starten':'Neu starten'}</button><button onClick={toggleTimer} disabled={board.timer.remaining<=0||board.timer.status==='ready'}>{board.timer.status==='running'?<><Pause/> Pausieren</>:<><Play/> Fortsetzen</>}</button><button onClick={resetTimer}><RotateCcw/> Zurücksetzen</button></div><button className="settings-toggle" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(x=>!x)}><Settings2/> Timer-Einstellungen <ChevronDown/></button>{settingsOpen&&<div className="timer-settings"><label>Minuten<input aria-label="Timer Minuten" type="number" min="0" max="180" value={minutes} onChange={e=>setMinutes(e.target.value)}/></label><label>Sekunden<input aria-label="Timer Sekunden" type="number" min="0" max="59" value={seconds} onChange={e=>setSeconds(e.target.value)}/></label><button aria-label="Timer übernehmen" onClick={resetTimer}><Check/> Übernehmen</button></div>}</article>
+      <article className="board-widget materials-widget"><div className="widget-title"><ListChecks/><span>DAS BRAUCHST DU</span><button className="material-edit" onClick={openMaterials}><PenLine/> Material bearbeiten</button></div><ul className="material-list">{board.materials.map((item,index)=><li key={`${item}-${index}`}><Circle/><span>{item}</span></li>)}</ul></article>
+      <article className="board-widget story-launcher"><div className="widget-title"><Sparkles/><span>AKTIVE LORESTORY</span></div><div className="story-select"><span>{world.icon}</span><select aria-label="Aktive Lorestory" value={story.id} onChange={e=>selectStory(e.target.value)}>{available.map(item=><option value={item.id} key={item.id}>{item.title}</option>)}</select></div><p>{story.subject} · {story.age} Jahre · {story.duration}</p><button onClick={()=>setStoryNotice(true)}><CirclePlay/> Storymodus öffnen</button>{storyNotice&&<div className="story-notice" role="status"><Sparkles/><span><b>Storymodus noch nicht angebunden</b>Die ausgewählte Story ist vorgemerkt. Der interaktive Storymodus folgt.</span></div>}</article>
     </section>
+    {dialog==='assignment'&&<EditorDialog title="Aktuellen Auftrag bearbeiten" onClose={()=>setDialog(null)}><label className="dialog-label">Auftrag<textarea autoFocus aria-label="Aktueller Auftrag bearbeiten" maxLength={MAX_ASSIGNMENT_LENGTH} value={assignmentDraft} onChange={e=>setAssignmentDraft(e.target.value)}/><small>Empfehlung: höchstens 160 Zeichen · maximal {MAX_ASSIGNMENT_LENGTH} ({assignmentDraft.length}/{MAX_ASSIGNMENT_LENGTH})</small></label><div className="dialog-actions"><button onClick={()=>setDialog(null)}>Abbrechen</button><button onClick={saveAssignment}><Save/> Auftrag speichern</button></div></EditorDialog>}
+    {dialog==='materials'&&<EditorDialog title="Materialliste bearbeiten" onClose={()=>setDialog(null)}><div className="material-editor">{materialDraft.map((item,index)=><div className="material-input" key={index}><input aria-label={`Material ${index+1}`} value={item} onChange={e=>setMaterialDraft(current=>current.map((x,i)=>i===index?e.target.value:x))}/><button aria-label={`${item} nach oben`} disabled={index===0} onClick={()=>moveMaterial(index,-1)}><ArrowUp/></button><button aria-label={`${item} nach unten`} disabled={index===materialDraft.length-1} onClick={()=>moveMaterial(index,1)}><ArrowDown/></button><button aria-label={`${item} löschen`} onClick={()=>setMaterialDraft(current=>current.filter((_,i)=>i!==index))}><Trash2/></button></div>)}<button className="material-add" onClick={addMaterial} disabled={materialDraft.length>=MAX_MATERIALS}><Plus/> Material hinzufügen</button>{(materialLimit||materialDraft.length>=MAX_MATERIALS)&&<p className="limit-note" role="alert">Maximal acht Materialien sind möglich.</p>}<div className="dialog-actions"><button onClick={()=>setDialog(null)}>Abbrechen</button><button onClick={saveMaterials}><Save/> Speichern</button></div></div></EditorDialog>}
+    {dialog==='route'&&<EditorDialog title="Tagesroute bearbeiten" onClose={()=>setDialog(null)}><div className="route-editor">{routeDraft.map((item,index)=><div className="route-input" key={index}><i>{index+1}</i><input aria-label={`Routenpunkt ${index+1}`} value={item} onChange={e=>setRouteDraft(current=>current.map((x,i)=>i===index?e.target.value:x))}/><button aria-label={`Routenpunkt ${index+1} löschen`} onClick={()=>setRouteDraft(current=>current.filter((_,i)=>i!==index))} disabled={routeDraft.length===1}><Trash2/></button></div>)}<button className="route-add" onClick={()=>setRouteDraft(current=>[...current,'Neue Etappe'])}><Plus/> Etappe</button><div className="dialog-actions"><button onClick={()=>setDialog(null)}>Abbrechen</button><button onClick={saveRoute}><Save/> Speichern</button></div></div></EditorDialog>}
   </main>
 }
 function StoryCard({story,action,active,market=false,owned=false}) { const w=worlds.find(x=>x.id===story.world); return <article className="story-card"><div className="story-visual" style={{'--accent':story.accent}}><span>{w.icon}</span><small>{w.name}</small>{active&&<b className="active-tag"><Check size={12}/> AKTIV</b>}</div><div className="story-info"><div className="chips"><span>{story.subject}</span><span>{story.age} Jahre</span></div><h3>{story.title}</h3><p>{story.description}</p><div className="story-meta"><span><BookOpen size={14}/>{story.chapters} Kapitel</span><span>◷ {story.duration}</span></div><button className={active?'selected':''} disabled={owned&&market} onClick={action}>{market?(owned?<><Check/> Im Fundus</>:<><Plus/> Zum Fundus</>):active?'Aktive Story':'Im Loreboard aktivieren'}</button></div></article> }
