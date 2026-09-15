@@ -40,6 +40,11 @@ test('presence expires after the documented timeout and readiness is scene-bound
   assert.equal(isParticipantConnected(participant, now), false)
   assert.equal(readyCount([{ status: 'connected', ready_scene_id: 'a' }, { status: 'removed', ready_scene_id: 'a' }, { status: 'connected', ready_scene_id: 'old' }], 'a'), 1)
 })
+test('unknown RPC errors use an accurate student message rather than claiming an outage', () => {
+  const message = missionErrorMessage({ message: 'column reference \"session_id\" is ambiguous', code: '42702' })
+  assert.match(message, /technischen Fehler/)
+  assert.doesNotMatch(message, /Supabase|nicht erreichbar/)
+})
 test('mission errors include completed and removal states', () => {
   for (const code of ['INVALID_CODE', 'JOINING_CLOSED', 'CALLSIGN_TAKEN', 'INVALID_CALLSIGN', 'PARTICIPANT_REMOVED', 'MISSION_COMPLETED']) assert.notEqual(missionErrorMessage({ message: code }), missionErrorMessage({ message: 'unknown' }))
 })
@@ -49,7 +54,7 @@ test('realtime cleanup removes its exact channel', () => {
 })
 test('migration declares narrow RPC-only writes, completed guards and collision retries', async () => {
   const sql = await readFile(new globalThis.URL('../supabase/migrations/202609150001_story_mode_stage_1.sql', import.meta.url), 'utf8')
-  for (const fragment of ["security definer set search_path=''", 'for attempt in 1..8 loop', 'OPEN_SESSION_EXISTS', "mission_status='completed'", 'MISSION_COMPLETED', 'own_participant_select', 'remove_mission_participant', 'grant select(id,session_id,callsign,status', 'loreboards_confirmed_teacher_insert', 'alter publication supabase_realtime']) assert.match(sql, new RegExp(fragment.replace(/[()]/g, '\\$&'), 'i'))
+  for (const fragment of ["security definer set search_path=''", 'for v_attempt in 1..8 loop', 'OPEN_SESSION_EXISTS', "mission_status='completed'", 'MISSION_COMPLETED', 'own_participant_select', 'remove_mission_participant', 'grant select(id,session_id,callsign,status', 'loreboards_confirmed_teacher_insert', 'alter publication supabase_realtime']) assert.match(sql, new RegExp(fragment.replace(/[()]/g, '\\$&'), 'i'))
   assert.doesNotMatch(sql, /grant select,update on public\.mission_participants/i)
 })
 
@@ -67,4 +72,25 @@ test('replacing a live connection cleans only the old resources and retains the 
   controller.replace('old-channel', 'old-timer'); controller.replace('new-channel', 'new-timer')
   assert.deepEqual(removed, ['old-channel']); assert.deepEqual(cleared, ['old-timer'])
   controller.stop(); assert.deepEqual(removed, ['old-channel', 'new-channel']); assert.deepEqual(cleared, ['old-timer', 'new-timer'])
+})
+
+
+test('inspect_mission correction prevents SQLSTATE 42702 output-column conflicts', async () => {
+  const sql = await readFile(new globalThis.URL('../supabase/migrations/202609150002_fix_mission_rpc_ambiguity.sql', import.meta.url), 'utf8')
+  const inspect = sql.match(/create or replace function public\.inspect_mission[\s\S]*?end \$\$;/i)?.[0] || ''
+  assert.match(inspect, /#variable_conflict error/)
+  assert.match(inspect, /mp\.session_id=v_session\.id/)
+  assert.match(inspect, /mp\.auth_user_id=auth\.uid\(\)/)
+  for (const output of ['session_id', 'participant_id', 'title', 'status', 'joining_open', 'callsigns', 'taken_callsigns', 'participant_status', 'callsign', 'current_scene_id', 'ready_scene_id']) {
+    assert.match(inspect, new RegExp(`\\sas ${output}(?:,|;)`, 'i'), `missing explicit alias for ${output}`)
+  }
+  assert.doesNotMatch(inspect, /where\s+(?:session_id|participant_id|status|auth_user_id|callsign)\b/i)
+})
+
+test('all corrected mission RPCs retain hardening and explicit conflict detection', async () => {
+  const sql = await readFile(new globalThis.URL('../supabase/migrations/202609150002_fix_mission_rpc_ambiguity.sql', import.meta.url), 'utf8')
+  assert.equal((sql.match(/security definer set search_path='' as \$\$/gi) || []).length, 8)
+  assert.equal((sql.match(/#variable_conflict error/g) || []).length, 6)
+  assert.match(sql, /revoke all on function[\s\S]+from public,anon;/i)
+  assert.match(sql, /grant execute on function[\s\S]+to authenticated;/i)
 })

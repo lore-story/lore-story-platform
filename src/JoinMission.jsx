@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, Radio, Rocket, Wifi, WifiOff } from 'lucide-react'
-import { createLiveController, HEARTBEAT_INTERVAL_MS, missionErrorMessage } from './mission'
+import { createLiveController, HEARTBEAT_INTERVAL_MS, logMissionError, missionErrorMessage } from './mission'
 
 export default function JoinMission({ supabase, code }) {
   const normalized = code.trim().toUpperCase()
@@ -49,6 +49,7 @@ export default function JoinMission({ supabase, code }) {
       }
       return inspected
     } catch (error) {
+      logMissionError('Sitzung prüfen', error)
       setMessage(missionErrorMessage(error))
       setScreen(error?.message === 'PARTICIPANT_REMOVED' ? 'removed' : 'error')
       return null
@@ -59,6 +60,7 @@ export default function JoinMission({ supabase, code }) {
     stopLive()
     const heartbeat = async connected => {
       const { error } = await supabase.rpc('update_my_mission_presence', { p_session_id: joined.session_id, p_connected: connected, p_ready: null })
+      if (error) logMissionError('Anwesenheit aktualisieren', error)
       if (error?.message === 'PARTICIPANT_REMOVED') showRemoved()
       if (error?.message === 'MISSION_COMPLETED') stopLive()
     }
@@ -86,6 +88,7 @@ export default function JoinMission({ supabase, code }) {
       window.localStorage.setItem(`mission-callsign:${normalized}`, joined.callsign)
       setScreen('waiting')
     } catch (error) {
+      logMissionError('Mission beitreten', error)
       const errorMessage = missionErrorMessage(error)
       setMessage(errorMessage)
       if (error?.message === 'PARTICIPANT_REMOVED') {
@@ -124,6 +127,7 @@ export default function JoinMission({ supabase, code }) {
 
   const ready = async readyValue => {
     const { error } = await supabase.rpc('update_my_mission_presence', { p_session_id: info.session_id, p_connected: true, p_ready: readyValue })
+    if (error) logMissionError('Bereitschaft aktualisieren', error)
     if (error?.message === 'PARTICIPANT_REMOVED') showRemoved()
     else if (error) setMessage(missionErrorMessage(error))
     else setInfo(current => ({ ...current, ready_scene_id: readyValue ? current.current_scene_id : null }))

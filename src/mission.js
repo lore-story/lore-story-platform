@@ -33,7 +33,11 @@ export const missionErrorMessage = error => ({
   MISSION_COMPLETED: 'Diese Mission ist bereits abgeschlossen.',
   ANONYMOUS_AUTH_REQUIRED: 'Der anonyme Zugang konnte nicht hergestellt werden.',
   OPEN_SESSION_EXISTS: 'Für dieses Loreboard ist bereits eine offene Missionssitzung vorhanden.',
-}[error?.message] || 'Supabase ist vorübergehend nicht erreichbar. Bitte versuche es erneut.')
+}[error?.message] || 'Die Mission konnte wegen eines technischen Fehlers nicht geladen werden. Bitte versuche es erneut oder informiere deine Lehrkraft.')
+
+export function logMissionError(operation, error) {
+  console.error(`[Mission] ${operation} fehlgeschlagen`, error)
+}
 
 const SESSION_COLUMNS = 'id,story_slug,title,join_code,status,joining_open,current_scene_id,created_at,started_at,completed_at,updated_at'
 const PARTICIPANT_COLUMNS = 'id,session_id,callsign,status,ready_scene_id,joined_at,last_seen_at,removed_at'
