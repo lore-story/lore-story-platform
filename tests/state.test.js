@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { addStoryToFundus, DEFAULT_MATERIALS, DEFAULT_STATE, DEFAULT_TIMER, readMaterials, readState, restoreTimer } from '../src/state.js'
+import { addStoryToFundus, DEFAULT_MATERIALS, DEFAULT_STATE, DEFAULT_TIMER, readMaterials, readState, restoreTimer, timerRemaining } from '../src/state.js'
 import { createLocalLoreboardRepository, LOREBOARD_STORAGE_KEY, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from '../src/loreboardRepository.js'
 
 test('starts with a usable demo story when storage is empty', () => {
@@ -49,6 +49,15 @@ test('restores a running timer from its target time', () => {
   }) }, 41_000)
 
   assert.deepEqual(timer, { duration: 300, remaining: 60, status: 'running', startedAt: 1_000, targetAt: 101_000 })
+})
+
+test('derives a running timer display locally without changing its persisted state', () => {
+  const timer = { duration: 60, remaining: 60, status: 'running', startedAt: 1_000, targetAt: 61_000 }
+
+  assert.equal(timerRemaining(timer, 1_000), 60)
+  assert.equal(timerRemaining(timer, 2_001), 59)
+  assert.equal(timerRemaining(timer, 61_000), 0)
+  assert.equal(timer.remaining, 60)
 })
 
 test('keeps paused timers paused and marks elapsed running timers expired', () => {
@@ -147,6 +156,20 @@ test('existing cloud data has priority over local demo data', async () => {
   const loaded = await createSupabaseLoreboardRepository(cloud.client, { id: 'u1' }, local).load()
   assert.equal(loaded.assignment, 'Cloud gewinnt')
   assert.equal(JSON.parse(local.getItem(LOREBOARD_STORAGE_KEY)).assignment, 'Cloud gewinnt')
+})
+
+test('a running cloud timer is restored from its absolute target in another browser', async () => {
+  const targetAt = Date.now() + 10_000
+  const cloudState = { ...DEFAULT_LOREBOARD_STATE, timer: { duration: 60, remaining: 60, status: 'running', startedAt: Date.now(), targetAt } }
+  const cloud = cloudMock({ id: 'board', state: cloudState, updated_at: '2026-01-01T00:00:00Z' })
+  const otherBrowser = memoryStorage()
+
+  const restored = await createSupabaseLoreboardRepository(cloud.client, { id: 'u1' }, otherBrowser).load()
+
+  assert.equal(restored.timer.status, 'running')
+  assert.ok(restored.timer.remaining > 0 && restored.timer.remaining <= 10)
+  assert.equal(restored.timer.targetAt, targetAt)
+  assert.equal(JSON.parse(otherBrowser.getItem(LOREBOARD_STORAGE_KEY)).timer.targetAt, targetAt)
 })
 
 test('cloud saves are user-bound, revision checked, and keep the local fallback on failure', async () => {

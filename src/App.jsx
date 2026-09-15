@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, Circle, CirclePlay, Clock3, Compass, Feather, Gem, Library, ListChecks, LogOut, Maximize, Menu, PenLine, Pause, Play, Plus, RotateCcw, Save, Search, Settings2, Trash2, ShoppingBag, Sparkles, TimerReset, WandSparkles, X } from 'lucide-react'
 import { stories, worlds } from './data'
-import { addStoryToFundus, readState } from './state'
+import { addStoryToFundus, readState, timerRemaining } from './state'
 import { createSupabaseLoreboardRepository, DEFAULT_LOREBOARD_STATE, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from './loreboardRepository'
 import { authErrorMessage, signIn, signUp } from './auth'
 import { getSupabaseClient } from './supabaseClient'
@@ -92,13 +92,30 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setVi
   const [minutes, setMinutes] = useState(10)
   const [seconds, setSeconds] = useState(0)
   const [storyNotice, setStoryNotice] = useState(false)
+  const skipInitialSave = useRef(true)
+  const saveVersion = useRef(0)
 
   useEffect(() => { let active=true; repository.load().then(saved=>{ if(!active)return; const next={...saved,activeStory:saved.activeStory||activeStory,activeWorld:saved.activeWorld||activeWorld}; setBoard(next); setMinutes(Math.floor(next.timer.duration/60)); setSeconds(next.timer.duration%60); setActiveStory(next.activeStory); setSaveStatus(repository.offline?'Nur auf diesem Gerät gespeichert':''); setLoaded(true) }).catch(()=>{ if(active){setSaveStatus('Speichern fehlgeschlagen');setLoaded(true)} }); return()=>{active=false} }, [repository])
-  useEffect(() => { if (!loaded) return undefined; setSaveStatus('Speichert …'); const pending=window.setTimeout(()=>repository.save(board).then(()=>setSaveStatus('Online gespeichert')).catch(()=>setSaveStatus('Speichern fehlgeschlagen · Nur auf diesem Gerät gespeichert')),180); return()=>window.clearTimeout(pending) }, [board, loaded, repository])
+  useEffect(() => {
+    if (!loaded) return
+    if (skipInitialSave.current) { skipInitialSave.current = false; return }
+    const version = ++saveVersion.current
+    setSaveStatus('Speichert …')
+    repository.save(board)
+      .then(() => { if (version === saveVersion.current) setSaveStatus('Online gespeichert') })
+      .catch(() => { if (version === saveVersion.current) setSaveStatus('Speichern fehlgeschlagen · Nur auf diesem Gerät gespeichert') })
+  }, [board, loaded, repository])
   useEffect(() => { const clock=window.setInterval(()=>setNow(new Date()),1000); return()=>window.clearInterval(clock) }, [])
-  useEffect(() => { if(board.timer.status!=='running') return undefined; const tick=()=>setBoard(current=>{const remaining=Math.max(0,Math.ceil((current.timer.targetAt-Date.now())/1000));return {...current,timer:remaining?{...current.timer,remaining}:{...current.timer,remaining:0,status:'expired',targetAt:null}}}); tick(); const id=window.setInterval(tick,250); return()=>window.clearInterval(id) }, [board.timer.status])
+  useEffect(() => {
+    if (board.timer.status !== 'running') return undefined
+    const expire = () => setBoard(current => current.timer.status === 'running' && timerRemaining(current.timer) === 0
+      ? { ...current, timer: { ...current.timer, remaining: 0, status: 'expired', targetAt: null } }
+      : current)
+    const timeout = window.setTimeout(expire, Math.max(0, board.timer.targetAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [board.timer.status, board.timer.targetAt])
 
-  const update = patch => { setSaveStatus('Speichert …'); setBoard(current=>({...current,...patch})) }
+  const update = patch => setBoard(current=>({...current,...patch}))
   const openAssignment=()=>{setAssignmentDraft(board.assignment);setDialog('assignment')}
   const saveAssignment=()=>{const clean=assignmentDraft.trim();if(clean){update({assignment:clean});setDialog(null)}}
   const openMaterials=()=>{setMaterialDraft([...board.materials]);setMaterialLimit(false);setDialog('materials')}
@@ -109,13 +126,14 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setVi
   const saveRoute=()=>{const phases=routeDraft.map(x=>x.trim()).filter(Boolean);if(phases.length){update({phases,activePhase:Math.min(board.activePhase,phases.length-1)});setDialog(null)}}
   const timerValue=()=>Math.max(0,Number(minutes)*60+Number(seconds))
   const resetTimer=()=>{const duration=timerValue();update({timer:{duration,remaining:duration,status:'ready',startedAt:null,targetAt:null}})}
-  const startTimer=()=>{setSaveStatus('Speichert …');setBoard(current=>{const remaining=current.timer.remaining<=0?current.timer.duration:current.timer.remaining;if(!remaining)return current;const startedAt=Date.now();return {...current,timer:{...current.timer,remaining,status:'running',startedAt,targetAt:startedAt+remaining*1000}}})}
-  const toggleTimer=()=>{setSaveStatus('Speichert …');setBoard(current=>{const timer=current.timer;return {...current,timer:timer.status==='running'?{...timer,status:'paused',targetAt:null}:{...timer,status:'running',startedAt:Date.now(),targetAt:Date.now()+timer.remaining*1000}}})}
+  const startTimer=()=>setBoard(current=>{const remaining=current.timer.remaining<=0?current.timer.duration:current.timer.remaining;if(!remaining)return current;const startedAt=Date.now();return {...current,timer:{...current.timer,remaining,status:'running',startedAt,targetAt:startedAt+remaining*1000}}})
+  const toggleTimer=()=>setBoard(current=>{const timer=current.timer;if(timer.status==='running'){const remaining=timerRemaining(timer);return {...current,timer:{...timer,remaining,status:remaining?'paused':'expired',targetAt:null}}}const startedAt=Date.now();return {...current,timer:{...timer,status:'running',startedAt,targetAt:startedAt+timer.remaining*1000}}})
   const selectStory=value=>{setActiveStory(value);update({activeStory:value});setStoryNotice(false)}
   const toggleFullscreen=async()=>{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}
   const story=stories.find(item=>item.id===board.activeStory)||available[0]
   const world=worlds.find(item=>item.id===board.activeWorld)||worlds.find(item=>item.id===activeWorld)
-  const time=`${String(Math.floor(board.timer.remaining/60)).padStart(2,'0')}:${String(board.timer.remaining%60).padStart(2,'0')}`
+  const visibleRemaining=timerRemaining(board.timer,now.getTime())
+  const time=`${String(Math.floor(visibleRemaining/60)).padStart(2,'0')}:${String(visibleRemaining%60).padStart(2,'0')}`
   const timerStatus={ready:'Bereit',running:'Timer läuft',paused:'Pausiert',expired:'Zeit ist um'}[board.timer.status]
 
   return <main className="loreboard-mode" style={{'--lore-accent':world.colors[0],'--lore-deep':world.colors[1]}}>
