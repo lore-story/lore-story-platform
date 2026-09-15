@@ -28,3 +28,7 @@ Nach der Anmeldung lädt die Anwendung das zuletzt aktualisierte eigene Board au
 Änderungen werden entprellt, zuerst lokal gesichert und anschließend in einer seriellen Warteschlange in die Cloud geschrieben. Updates filtern sowohl nach `user_id` als auch nach `id` und vergleichen `updated_at`. Öffnen zwei Browser dasselbe Board, gewinnt daher nicht still ein verspätetes altes Update: Nach einer fremden Änderung schlägt der nächste Update-Versuch der älteren Sitzung als Konflikt fehl und der lokale Stand bleibt erhalten. Eine automatische Echtzeit-Zusammenführung ist noch nicht implementiert; zum Übernehmen des Cloud-Stands muss neu geladen werden.
 
 Ein laufender Timer speichert seinen Zielzeitpunkt. Beim Laden wird die tatsächlich vergangene Zeit abgezogen; pausierte und abgelaufene Timer starten nicht erneut.
+
+## Storymodus Stufe 1
+
+Sichere Missionssitzungen, anonymer Beitritt, RLS/RPC, Realtime und die erforderlichen Dashboard-Schritte sind in [`docs/STORY_MODE_STAGE_1.md`](docs/STORY_MODE_STAGE_1.md) dokumentiert. Die SQL-Datei wird bewusst nicht automatisch auf ein entferntes Projekt angewendet.

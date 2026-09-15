@@ -13,6 +13,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
     "lucide-react": "latest",
+    "qrcode": "^1.5.4",
     "react": "latest",
     "react-dom": "latest",
     "tslib": "^2.8.1",
