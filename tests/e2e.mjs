@@ -15,7 +15,7 @@ async function installSupabaseMock(page) {
   await page.addInitScript(() => {
     const listeners = new Set()
     window.__e2eCloudUpdates = 0
-    const user = { id: 'e2e-user', email: 'teacher@example.test' }
+    const user = { id: 'e2e-user', email: 'teacher@example.test', is_anonymous: false, email_confirmed_at: '2026-01-01T00:00:00Z' }
     let session = localStorage.getItem('e2e-session') ? { user, access_token: 'mock' } : null
     const notify = event => listeners.forEach(listener => listener(event, session))
     const query = operation => {
@@ -221,3 +221,5 @@ try {
 } finally {
   await browser.close()
 }
+
+await import('./mission-e2e.mjs')

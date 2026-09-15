@@ -28,11 +28,13 @@ function App() {
   }, [supabase])
   useEffect(() => localStorage.setItem('lore-state', JSON.stringify({ view, fundus, activeStory, activeWorld })), [view, fundus, activeStory, activeWorld])
   const notify = (text) => { setToast(text); window.setTimeout(() => setToast(''), 2600) }
-  const repository = useMemo(() => session ? createSupabaseLoreboardRepository(supabase, session.user) : null, [supabase, session])
+  const teacherSession = session && !session.user?.is_anonymous && Boolean(session.user?.email_confirmed_at || session.user?.confirmed_at)
+  const repository = useMemo(() => teacherSession ? createSupabaseLoreboardRepository(supabase, session.user) : null, [supabase, session, teacherSession])
   const joinMatch = window.location.pathname.match(/^\/join\/([^/]+)\/?$/)
   if (joinMatch) return supabase ? <JoinMission supabase={supabase} code={decodeURIComponent(joinMatch[1])}/> : <main className="join-page"><p>{configError}</p></main>
   if (authLoading) return <main className="session-loading" role="status"><Brand/><p>Sitzung wird geprüft …</p></main>
   if (!session) return <Landing supabase={supabase} configError={configError} />
+  if (!teacherSession) return <main className="join-page"><div className="join-card"><Brand light/><h1>Schülerzugang aktiv</h1><p>Dieses Gerät ist anonym für eine Mission angemeldet. Öffne den gültigen Einladungslink oder scanne den QR-Code der Lehrkraft.</p></div></main>
   const logout = async () => { const { error } = await supabase.auth.signOut(); if (error) notify(authErrorMessage(error)) }
   return <Platform {...{ supabase, view, setView, fundus, setFundus, activeStory, setActiveStory, activeWorld, setActiveWorld, notify, repository }} user={session.user} onLogout={logout} toast={toast} />
 }

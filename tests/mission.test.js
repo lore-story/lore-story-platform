@@ -1,16 +1,54 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { CALLSIGNS, createMissionRepository, missionErrorMessage, readyCount, STORY_SLUG } from '../src/mission.js'
+import { CALLSIGNS, createMissionRepository, isParticipantConnected, missionErrorMessage, PRESENCE_TIMEOUT_MS, readyCount } from '../src/mission.js'
 
-function queryMock() {
- const calls=[];let operation='select';let payload;const query={select(){return query},eq(k,v){calls.push(['eq',k,v]);return query},neq(k,v){calls.push(['neq',k,v]);return query},order(){return query},insert(v){operation='insert';payload=v;return query},update(v){operation='update';payload=v;return query},single:async()=>({data:{id:operation==='insert'?'new-run':'s1',story_slug:STORY_SLUG,...payload},error:null}),then(resolve){return resolve({data:[],error:null})}}
- return {client:{from:t=>{calls.push(['from',t]);return query},channel:()=>({on(){return this},subscribe(){return this}}),removeChannel:c=>calls.push(['remove',c])},calls}
+function clientMock() {
+  const calls = []
+  const client = {
+    rpc: async (name, args) => { calls.push(['rpc', name, args]); return { data: [{ id: `${name}-${calls.length}` }], error: null } },
+    from: table => {
+      const query = { select(columns) { calls.push(['select', table, columns]); return query }, eq() { return query }, order() { return query }, then(resolve) { return resolve({ data: [], error: null }) } }
+      return query
+    },
+    channel: name => ({ name, on() { return this }, subscribe() { return this } }),
+    removeChannel: channel => calls.push(['remove', channel.name]),
+  }
+  return { client, calls }
 }
 
-test('uses exactly 30 unique child-friendly callsigns in deterministic order',()=>{assert.equal(CALLSIGNS.length,30);assert.equal(new Set(CALLSIGNS).size,30);assert.deepEqual([...CALLSIGNS].sort((a,b)=>a.localeCompare(b,'de')),CALLSIGNS)})
-test('teacher creates each replay as a new server-coded session',async()=>{const mock=queryMock();const repo=createMissionRepository(mock.client,{id:'teacher'});const first=await repo.create('board');const second=await repo.create('board');assert.equal(first.id,'new-run');assert.equal(second.id,'new-run');assert.equal(mock.calls.filter(x=>x[0]==='from'&&x[1]==='mission_sessions').length,2);assert.ok(!('join_code' in first))})
-test('readiness counts once and only for the current scene',()=>{assert.equal(readyCount([{status:'connected',ready_scene_id:'a'},{status:'disconnected',ready_scene_id:'a'},{status:'removed',ready_scene_id:'a'},{status:'connected',ready_scene_id:'old'}],'a'),2)})
-test('mission errors are distinct and understandable',()=>{for(const code of ['INVALID_CODE','JOINING_CLOSED','CALLSIGN_TAKEN','INVALID_CALLSIGN','PARTICIPANT_REMOVED'])assert.notEqual(missionErrorMessage({message:code}),missionErrorMessage({message:'unknown'}))})
-test('realtime cleanup removes its exact channel',()=>{const mock=queryMock();const cleanup=createMissionRepository(mock.client,{id:'teacher'}).subscribe('s1',()=>{},()=>{});cleanup();assert.equal(mock.calls.at(-1)[0],'remove')})
-test('migration contains RLS, secure RPC grants, constraints, realtime, and server code generation',async()=>{const sql=await readFile(new globalThis.URL('../supabase/migrations/202609150001_story_mode_stage_1.sql',import.meta.url),'utf8');for(const fragment of ['enable row level security','security definer set search_path=\'\'','gen_random_bytes(6)','unique(session_id, auth_user_id)','mission_participants_active_callsign','PARTICIPANT_REMOVED','JOINING_CLOSED','CALLSIGN_TAKEN','alter publication supabase_realtime','revoke all on function'])assert.match(sql,new RegExp(fragment.replace(/[()]/g,'\\$&'),'i'))})
+test('uses exactly 30 unique, sorted, child-friendly callsigns', () => {
+  assert.equal(CALLSIGNS.length, 30)
+  assert.equal(new Set(CALLSIGNS).size, 30)
+  assert.deepEqual([...CALLSIGNS].sort((a, b) => a.localeCompare(b, 'de')), CALLSIGNS)
+})
+test('teacher creates every replay through the server RPC without supplying a code', async () => {
+  const mock = clientMock(); const repo = createMissionRepository(mock.client)
+  const first = await repo.create('board'); const second = await repo.create('board')
+  assert.notEqual(first.id, second.id)
+  assert.deepEqual(mock.calls.filter(call => call[1] === 'create_mission_session').map(call => call[2]), [{ p_loreboard_id: 'board' }, { p_loreboard_id: 'board' }])
+})
+test('repository requests no participant auth UUID and mutations use narrow RPCs', async () => {
+  const mock = clientMock(); const repo = createMissionRepository(mock.client)
+  await repo.participants('session'); await repo.remove('participant'); await repo.update('session', 'start')
+  assert.doesNotMatch(mock.calls.find(call => call[0] === 'select')[2], /auth_user_id/)
+  assert.ok(mock.calls.some(call => call[1] === 'remove_mission_participant'))
+  assert.ok(mock.calls.some(call => call[1] === 'update_mission_session'))
+})
+test('presence expires after the documented timeout and readiness is scene-bound', () => {
+  const now = Date.now(); const participant = { status: 'connected', last_seen_at: new Date(now - PRESENCE_TIMEOUT_MS - 1).toISOString() }
+  assert.equal(isParticipantConnected(participant, now), false)
+  assert.equal(readyCount([{ status: 'connected', ready_scene_id: 'a' }, { status: 'removed', ready_scene_id: 'a' }, { status: 'connected', ready_scene_id: 'old' }], 'a'), 1)
+})
+test('mission errors include completed and removal states', () => {
+  for (const code of ['INVALID_CODE', 'JOINING_CLOSED', 'CALLSIGN_TAKEN', 'INVALID_CALLSIGN', 'PARTICIPANT_REMOVED', 'MISSION_COMPLETED']) assert.notEqual(missionErrorMessage({ message: code }), missionErrorMessage({ message: 'unknown' }))
+})
+test('realtime cleanup removes its exact channel', () => {
+  const mock = clientMock(); const cleanup = createMissionRepository(mock.client).subscribe('s1', () => {}, () => {})
+  cleanup(); assert.deepEqual(mock.calls.at(-1), ['remove', 'mission:s1'])
+})
+test('migration declares narrow RPC-only writes, completed guards and collision retries', async () => {
+  const sql = await readFile(new globalThis.URL('../supabase/migrations/202609150001_story_mode_stage_1.sql', import.meta.url), 'utf8')
+  for (const fragment of ["security definer set search_path=''", 'for attempt in 1..8 loop', 'OPEN_SESSION_EXISTS', "mission_status='completed'", 'MISSION_COMPLETED', 'own_participant_select', 'remove_mission_participant', 'grant select(id,session_id,callsign,status', 'loreboards_confirmed_teacher_insert', 'alter publication supabase_realtime']) assert.match(sql, new RegExp(fragment.replace(/[()]/g, '\\$&'), 'i'))
+  assert.doesNotMatch(sql, /grant select,update on public\.mission_participants/i)
+})
