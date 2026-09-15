@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { addStoryToFundus, DEFAULT_MATERIALS, DEFAULT_STATE, readMaterials, readState, restoreTimer } from '../src/state.js'
+import { addStoryToFundus, DEFAULT_MATERIALS, DEFAULT_STATE, DEFAULT_TIMER, readMaterials, readState, restoreTimer } from '../src/state.js'
+import { createLocalLoreboardRepository, LOREBOARD_STORAGE_KEY, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from '../src/loreboardRepository.js'
 
 test('starts with a usable demo story when storage is empty', () => {
   const state = readState({ getItem: () => null })
@@ -58,4 +59,29 @@ test('keeps paused timers paused and marks elapsed running timers expired', () =
   assert.equal(paused.remaining, 42)
   assert.equal(expired.status, 'expired')
   assert.equal(expired.remaining, 0)
+})
+
+test('the asynchronous Loreboard repository saves and restores the complete board state', async () => {
+  const values = new Map()
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  const repository = createLocalLoreboardRepository(storage)
+  const saved = await repository.save({
+    phases: ['Start', 'Ende'], activePhase: 1, assignment: 'Gemeinsam forschen',
+    materials: Array.from({ length: 9 }, (_, index) => `Material ${index + 1}`),
+    timer: { duration: 120, remaining: 42, status: 'paused', startedAt: 10, targetAt: null },
+    activeStory: 'sternenuhr', activeWorld: 'aether',
+  })
+
+  assert.ok(values.has(LOREBOARD_STORAGE_KEY))
+  assert.equal(saved.materials.length, MAX_MATERIALS)
+  assert.deepEqual(await repository.load(), saved)
+})
+
+test('the Loreboard repository constrains projection content and tolerates broken storage', async () => {
+  const repository = createLocalLoreboardRepository({ getItem: () => '{broken', setItem: () => {} })
+  const defaults = await repository.load()
+  const constrained = await repository.save({ assignment: 'x'.repeat(MAX_ASSIGNMENT_LENGTH + 20), materials: [], timer: DEFAULT_TIMER })
+
+  assert.deepEqual(defaults.materials, DEFAULT_MATERIALS)
+  assert.equal(constrained.assignment.length, MAX_ASSIGNMENT_LENGTH)
 })
