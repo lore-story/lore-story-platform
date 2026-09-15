@@ -1,26 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, Circle, CirclePlay, Clock3, Compass, Feather, Gem, Library, ListChecks, LogOut, Maximize, Menu, PenLine, Pause, Play, Plus, RotateCcw, Save, Search, Settings2, Trash2, ShoppingBag, Sparkles, TimerReset, WandSparkles, X } from 'lucide-react'
 import { stories, worlds } from './data'
 import { addStoryToFundus, readState } from './state'
-import { createLoreboardRepository, DEFAULT_LOREBOARD_STATE, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from './loreboardRepository'
+import { createSupabaseLoreboardRepository, DEFAULT_LOREBOARD_STATE, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from './loreboardRepository'
+import { authErrorMessage, signIn, signUp } from './auth'
+import { getSupabaseClient } from './supabaseClient'
 
 function App() {
   const [initial] = useState(() => readState(localStorage))
-  const [loggedIn, setLoggedIn] = useState(initial.loggedIn)
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [configError, setConfigError] = useState('')
   const [view, setView] = useState(initial.view)
   const [fundus, setFundus] = useState(initial.fundus)
   const [activeStory, setActiveStory] = useState(initial.activeStory)
   const [activeWorld, setActiveWorld] = useState(initial.activeWorld)
   const [toast, setToast] = useState('')
-  useEffect(() => localStorage.setItem('lore-state', JSON.stringify({ loggedIn, view, fundus, activeStory, activeWorld })), [loggedIn, view, fundus, activeStory, activeWorld])
+  const [supabase] = useState(() => { try { return getSupabaseClient() } catch (error) { setConfigError(error.message); return null } })
+  useEffect(() => {
+    if (!supabase) { setAuthLoading(false); return undefined }
+    let active = true
+    supabase.auth.getSession().then(({ data, error }) => { if (!active) return; if (error) setConfigError(authErrorMessage(error)); setSession(data?.session ?? null); setAuthLoading(false) })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => { if (active) { setSession(nextSession); setAuthLoading(false) } })
+    return () => { active = false; listener.subscription.unsubscribe() }
+  }, [supabase])
+  useEffect(() => localStorage.setItem('lore-state', JSON.stringify({ view, fundus, activeStory, activeWorld })), [view, fundus, activeStory, activeWorld])
   const notify = (text) => { setToast(text); window.setTimeout(() => setToast(''), 2600) }
-  if (!loggedIn) return <Landing onLogin={() => setLoggedIn(true)} />
-  return <Platform {...{ view, setView, fundus, setFundus, activeStory, setActiveStory, activeWorld, setActiveWorld, notify }} onLogout={() => setLoggedIn(false)} toast={toast} />
+  const repository = useMemo(() => session ? createSupabaseLoreboardRepository(supabase, session.user) : null, [supabase, session])
+  if (authLoading) return <main className="session-loading" role="status"><Brand/><p>Sitzung wird geprüft …</p></main>
+  if (!session) return <Landing supabase={supabase} configError={configError} />
+  const logout = async () => { const { error } = await supabase.auth.signOut(); if (error) notify(authErrorMessage(error)) }
+  return <Platform {...{ view, setView, fundus, setFundus, activeStory, setActiveStory, activeWorld, setActiveWorld, notify, repository }} user={session.user} onLogout={logout} toast={toast} />
 }
-
 function Brand({ light = false }) { return <div className={`brand ${light ? 'brand-light' : ''}`}><span className="brand-mark"><Feather size={20} /></span><span>LORE <b>STORY</b></span></div> }
 
-function Landing({ onLogin }) {
+function Landing({ supabase, configError }) {
   const [loginOpen, setLoginOpen] = useState(false)
   return <main className="landing">
     <header className="public-nav"><Brand light /><nav><a href="#welten">Welten</a><a href="#features">So funktioniert’s</a><button className="btn ghost" onClick={() => setLoginOpen(true)}>Einloggen</button><button className="btn gold" onClick={() => setLoginOpen(true)}>Kostenlos starten <ArrowRight size={16} /></button></nav></header>
@@ -32,19 +46,27 @@ function Landing({ onLogin }) {
     <section id="welten" className="section worlds-section"><div className="section-heading"><div><span className="kicker">DEINE REISE. DEINE WELT.</span><h2>Wo Wissen Geschichten schreibt</h2></div><p>Jede Welt ist ein Tor zu neuen Perspektiven. Die Lernziele bleiben – das Abenteuer passt sich dir an.</p></div><div className="world-grid">{worlds.map((w,i)=><article className="world-card" key={w.id} style={{'--c1':w.colors[0],'--c2':w.colors[1]}}><div className="world-art"><span className="world-num">0{i+1}</span><i>{w.icon}</i></div><div className="world-copy"><small>{w.label}</small><h3>{w.name}</h3><p>{w.description}</p><button>Welt erkunden <ArrowRight size={16}/></button></div></article>)}</div></section>
     <section id="features" className="section feature-section"><div className="feature-intro"><span className="kicker">EINE IDEE. UNENDLICHE WEGE.</span><h2>Vom Lernziel<br/>zum Abenteuer.</h2><p>Alles, was du brauchst, um Wissen in Geschichten zu verwandeln – intuitiv, flexibel und voller Magie.</p></div><div className="feature-list">{[[WandSparkles,'Geschichten gestalten','Baue verzweigte Lernabenteuer mit Szenen, Aufgaben und Entscheidungen.'],[Library,'Wissen sammeln','Entdecke erprobte Stories im Lore-Market und organisiere sie in deinem Fundus.'],[Compass,'Welten wechseln','Übertrage eine Lernstruktur mit einem Klick in ein völlig neues Universum.']].map(([I,t,d],i)=><div className="feature" key={t}><span>0{i+1}</span><I/><div><h3>{t}</h3><p>{d}</p></div></div>)}</div></section>
     <footer><Brand light/><p>Geschichten öffnen Türen. Wissen zeigt den Weg.</p><small>© 2026 Lore Story · Ein Prototyp für neugierige Menschen</small></footer>
-    {loginOpen && <LoginModal onClose={()=>setLoginOpen(false)} onLogin={onLogin}/>}
+    {loginOpen && <LoginModal onClose={()=>setLoginOpen(false)} supabase={supabase} configError={configError}/>}
   </main>
 }
 
-function LoginModal({ onClose, onLogin }) { const [register,setRegister]=useState(false); return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="login-modal"><button className="modal-close" onClick={onClose}><X/></button><Brand/><span className="kicker">WILLKOMMEN IN DER WERKSTATT</span><h2>{register?'Deine Geschichte beginnt.':'Schön, dass du wieder da bist.'}</h2><p>{register?'Erschaffe deinen kostenlosen Lore-Zugang.':'Melde dich an und setze dein Abenteuer fort.'}</p><label>E-Mail-Adresse<input type="email" defaultValue="demo@lore-story.de"/></label><label>Passwort<input type="password" defaultValue="lorestory"/></label><button className="btn dark large full" onClick={onLogin}>{register?'Konto erstellen':'In die Lore-Werkstatt'} <ArrowRight size={17}/></button><div className="demo-note"><Sparkles size={15}/><span><b>Demo-Modus</b><br/>Beliebige Zugangsdaten funktionieren.</span></div><button className="switch-auth" onClick={()=>setRegister(!register)}>{register?'Bereits dabei? Einloggen':'Noch nicht dabei? Kostenlos registrieren'}</button></div></div> }
+function LoginModal({ onClose, supabase, configError }) {
+  const [register,setRegister]=useState(false)
+  const [email,setEmail]=useState('')
+  const [password,setPassword]=useState('')
+  const [message,setMessage]=useState(configError)
+  const [busy,setBusy]=useState(false)
+  const submit=async event=>{event.preventDefault();if(!supabase)return;setBusy(true);setMessage('');try{if(register){const result=await signUp(supabase,email,password);if(result.confirmationRequired)setMessage('Fast geschafft: Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.')}else await signIn(supabase,email,password)}catch(error){setMessage(authErrorMessage(error))}finally{setBusy(false)}}
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="login-modal" onSubmit={submit}><button type="button" className="modal-close" onClick={onClose}><X/></button><Brand/><span className="kicker">WILLKOMMEN IN DER WERKSTATT</span><h2>{register?'Deine Geschichte beginnt.':'Schön, dass du wieder da bist.'}</h2><p>{register?'Erschaffe deinen kostenlosen Lore-Zugang.':'Melde dich an und setze dein Abenteuer fort.'}</p><label>E-Mail-Adresse<input aria-label="E-Mail-Adresse" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Passwort<input aria-label="Passwort" type="password" autoComplete={register?'new-password':'current-password'} minLength="6" required value={password} onChange={e=>setPassword(e.target.value)}/></label>{message&&<div className="auth-message" role="status">{message}</div>}<button className="btn dark large full" disabled={busy||!supabase}>{busy?'Bitte warten …':register?'Konto erstellen':'In die Lore-Werkstatt'} <ArrowRight size={17}/></button><button type="button" className="switch-auth" onClick={()=>{setRegister(!register);setMessage('')}}>{register?'Bereits dabei? Einloggen':'Noch nicht dabei? Kostenlos registrieren'}</button></form></div>
+}
 
 const navItems = [['overview',BookOpen,'Übersicht'],['loreboard',CirclePlay,'Loreboard'],['werkstatt',PenLine,'Werkstatt'],['fundus',Gem,'Fundus'],['market',ShoppingBag,'Lore-Market'],['weltwechsler',Compass,'Weltwechsler']]
 
 function Platform(props) {
-  const {view,setView,onLogout,toast}=props; const [mobile,setMobile]=useState(false)
+  const {view,setView,onLogout,toast,user}=props; const [mobile,setMobile]=useState(false)
   const go=(v)=>{setView(v);setMobile(false)}
   if(view==='loreboard') return <LoreboardMode {...props}/>
-  return <div className="platform"><aside className={mobile?'open':''}><div className="aside-head"><Brand light/><button className="mobile-close" onClick={()=>setMobile(false)}><X/></button></div><div className="workspace-label">MEINE LORE-WERKSTATT</div><nav>{navItems.map(([id,I,label])=><button className={view===id?'active':''} key={id} onClick={()=>go(id)}><I size={19}/>{label}{label==='Lore-Market'&&<span className="new-pill">NEU</span>}</button>)}</nav><div className="aside-world"><small>AKTIVE WELT</small><div><span>✦</span><b>{worlds.find(w=>w.id===props.activeWorld)?.name}</b></div></div><button className="profile" onClick={onLogout}><span>LS</span><div><b>Lea Schneider</b><small>Kreativkonto</small></div><LogOut size={17}/></button></aside>
+  return <div className="platform"><aside className={mobile?'open':''}><div className="aside-head"><Brand light/><button className="mobile-close" onClick={()=>setMobile(false)}><X/></button></div><div className="workspace-label">MEINE LORE-WERKSTATT</div><nav>{navItems.map(([id,I,label])=><button className={view===id?'active':''} key={id} onClick={()=>go(id)}><I size={19}/>{label}{label==='Lore-Market'&&<span className="new-pill">NEU</span>}</button>)}</nav><div className="aside-world"><small>AKTIVE WELT</small><div><span>✦</span><b>{worlds.find(w=>w.id===props.activeWorld)?.name}</b></div></div><button className="profile" onClick={onLogout}><span>LS</span><div><b>{user.email}</b><small>Kreativkonto</small></div><LogOut size={17}/></button></aside>
     <main className="app-main"><header className="app-top"><button className="menu-btn" onClick={()=>setMobile(true)}><Menu/></button><div><span className="breadcrumb">LORE STORY /</span> {navItems.find(n=>n[0]===view)?.[2]}</div><div className="top-actions"><button className="icon-btn"><Search size={19}/></button><button className="avatar">LS</button></div></header><div className="view">{view==='overview'&&<Overview {...props}/>} {view==='werkstatt'&&<Workshop {...props}/>} {view==='fundus'&&<Fundus {...props}/>} {view==='market'&&<Market {...props}/>} {view==='weltwechsler'&&<WorldSwitcher {...props}/>}</div></main>{toast&&<div className="toast"><Check size={17}/>{toast}</div>}</div>
 }
 
@@ -55,8 +77,7 @@ function EditorDialog({ title, children, onClose }) {
   return <div className="board-dialog-backdrop" role="presentation" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><section className="board-dialog" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button aria-label={`${title} schließen`} onClick={onClose}><X/></button></header>{children}</section></div>
 }
 
-function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setView }) {
-  const repository = useState(() => createLoreboardRepository())[0]
+function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setView, repository }) {
   const available = stories.filter(story => fundus.includes(story.id))
   const [board, setBoard] = useState(() => ({ ...DEFAULT_LOREBOARD_STATE, activeStory, activeWorld }))
   const [loaded, setLoaded] = useState(false)
@@ -72,8 +93,8 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setVi
   const [seconds, setSeconds] = useState(0)
   const [storyNotice, setStoryNotice] = useState(false)
 
-  useEffect(() => { let active=true; repository.load().then(saved=>{ if(!active)return; const next={...saved,activeStory:saved.activeStory||activeStory,activeWorld:saved.activeWorld||activeWorld}; setBoard(next); setMinutes(Math.floor(next.timer.duration/60)); setSeconds(next.timer.duration%60); setActiveStory(next.activeStory); setLoaded(true) }).catch(()=>{ if(active){setSaveStatus('Speichern fehlgeschlagen');setLoaded(true)} }); return()=>{active=false} }, [repository])
-  useEffect(() => { if (!loaded) return undefined; setSaveStatus('Speichert …'); const pending=window.setTimeout(()=>repository.save(board).then(()=>setSaveStatus('Gespeichert')).catch(()=>setSaveStatus('Speichern fehlgeschlagen')),180); return()=>window.clearTimeout(pending) }, [board, loaded, repository])
+  useEffect(() => { let active=true; repository.load().then(saved=>{ if(!active)return; const next={...saved,activeStory:saved.activeStory||activeStory,activeWorld:saved.activeWorld||activeWorld}; setBoard(next); setMinutes(Math.floor(next.timer.duration/60)); setSeconds(next.timer.duration%60); setActiveStory(next.activeStory); setSaveStatus(repository.offline?'Nur auf diesem Gerät gespeichert':''); setLoaded(true) }).catch(()=>{ if(active){setSaveStatus('Speichern fehlgeschlagen');setLoaded(true)} }); return()=>{active=false} }, [repository])
+  useEffect(() => { if (!loaded) return undefined; setSaveStatus('Speichert …'); const pending=window.setTimeout(()=>repository.save(board).then(()=>setSaveStatus('Online gespeichert')).catch(()=>setSaveStatus('Speichern fehlgeschlagen · Nur auf diesem Gerät gespeichert')),180); return()=>window.clearTimeout(pending) }, [board, loaded, repository])
   useEffect(() => { const clock=window.setInterval(()=>setNow(new Date()),1000); return()=>window.clearInterval(clock) }, [])
   useEffect(() => { if(board.timer.status!=='running') return undefined; const tick=()=>setBoard(current=>{const remaining=Math.max(0,Math.ceil((current.timer.targetAt-Date.now())/1000));return {...current,timer:remaining?{...current.timer,remaining}:{...current.timer,remaining:0,status:'expired',targetAt:null}}}); tick(); const id=window.setInterval(tick,250); return()=>window.clearInterval(id) }, [board.timer.status])
 

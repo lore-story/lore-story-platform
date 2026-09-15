@@ -1,5 +1,4 @@
 export const DEFAULT_STATE = Object.freeze({
-  loggedIn: false,
   view: 'overview',
   fundus: ['moosarchiv'],
   activeStory: 'moosarchiv',

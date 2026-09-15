@@ -85,3 +85,77 @@ test('the Loreboard repository constrains projection content and tolerates broke
   assert.deepEqual(defaults.materials, DEFAULT_MATERIALS)
   assert.equal(constrained.assignment.length, MAX_ASSIGNMENT_LENGTH)
 })
+
+import { authErrorMessage, signIn, signUp } from '../src/auth.js'
+import { createSupabaseLoreboardRepository, DEFAULT_LOREBOARD_STATE } from '../src/loreboardRepository.js'
+
+function memoryStorage(initial = {}) {
+  const values = new Map(Object.entries(initial))
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), values }
+}
+
+function cloudMock(existing = null, { updateError = null } = {}) {
+  let row = existing
+  const calls = []
+  const client = { from(table) {
+    assert.equal(table, 'loreboards')
+    let operation = 'select'; let payload; const filters = {}
+    const query = {
+      select() { return query }, eq(key, value) { filters[key] = value; return query }, order() { return query }, limit() { return query },
+      insert(value) { operation = 'insert'; payload = value; return query }, update(value) { operation = 'update'; payload = value; return query },
+      async maybeSingle() { return run() }, async single() { return run() },
+    }
+    async function run() {
+      calls.push({ operation, payload, filters })
+      if (operation === 'select') return { data: row, error: null }
+      if (operation === 'insert') { row = { id: 'board', state: payload.state, updated_at: '2026-01-01T00:00:00Z' }; return { data: row, error: null } }
+      if (updateError) return { data: null, error: updateError }
+      if (filters.updated_at !== row.updated_at) return { data: null, error: null }
+      row = { ...row, state: payload.state, updated_at: '2026-01-01T00:00:01Z' }
+      return { data: { updated_at: row.updated_at }, error: null }
+    }
+    return query
+  } }
+  return { client, calls, getRow: () => row }
+}
+
+test('registration reports required email confirmation and sign-in returns a session', async () => {
+  const session = { user: { id: 'u1' } }
+  assert.deepEqual(await signUp({ auth: { signUp: async input => ({ data: { session: null, input }, error: null }) } }, 'neu@example.de', 'secret1'), { session: null, confirmationRequired: true })
+  assert.equal(await signIn({ auth: { signInWithPassword: async () => ({ data: { session }, error: null }) } }, 'a@b.de', 'secret1'), session)
+})
+
+test('authentication exposes understandable German errors', async () => {
+  await assert.rejects(() => signIn({ auth: { signInWithPassword: async () => ({ data: {}, error: { message: 'Invalid login credentials' } }) } }, 'a@b.de', 'wrong'), error => error.message === 'Invalid login credentials')
+  assert.equal(authErrorMessage({ message: 'Invalid login credentials' }), 'E-Mail-Adresse oder Passwort ist nicht korrekt.')
+  assert.equal(authErrorMessage({ message: 'Email not confirmed' }), 'Bitte bestätige zuerst deine E-Mail-Adresse.')
+})
+
+test('first cloud load creates a board and migrates existing local state once', async () => {
+  const local = memoryStorage({ [LOREBOARD_STORAGE_KEY]: JSON.stringify({ ...DEFAULT_LOREBOARD_STATE, assignment: 'Mein lokaler Stand' }) })
+  const cloud = cloudMock()
+  const repository = createSupabaseLoreboardRepository(cloud.client, { id: 'u1' }, local)
+  assert.equal((await repository.load()).assignment, 'Mein lokaler Stand')
+  assert.equal(cloud.getRow().state.assignment, 'Mein lokaler Stand')
+  assert.equal(local.getItem(`${LOREBOARD_STORAGE_KEY}:migrated:u1`), 'local')
+})
+
+test('existing cloud data has priority over local demo data', async () => {
+  const cloudState = { ...DEFAULT_LOREBOARD_STATE, assignment: 'Cloud gewinnt' }
+  const cloud = cloudMock({ id: 'board', state: cloudState, updated_at: '2026-01-01T00:00:00Z' })
+  const local = memoryStorage({ [LOREBOARD_STORAGE_KEY]: JSON.stringify({ ...DEFAULT_LOREBOARD_STATE, assignment: 'Lokal' }) })
+  const loaded = await createSupabaseLoreboardRepository(cloud.client, { id: 'u1' }, local).load()
+  assert.equal(loaded.assignment, 'Cloud gewinnt')
+  assert.equal(JSON.parse(local.getItem(LOREBOARD_STORAGE_KEY)).assignment, 'Cloud gewinnt')
+})
+
+test('cloud saves are user-bound, revision checked, and keep the local fallback on failure', async () => {
+  const cloud = cloudMock({ id: 'board', state: DEFAULT_LOREBOARD_STATE, updated_at: '2026-01-01T00:00:00Z' }, { updateError: new Error('offline') })
+  const local = memoryStorage()
+  const repository = createSupabaseLoreboardRepository(cloud.client, { id: 'u1' }, local)
+  await repository.load()
+  await assert.rejects(() => repository.save({ ...DEFAULT_LOREBOARD_STATE, assignment: 'Offline erhalten' }), /offline/)
+  assert.equal(JSON.parse(local.getItem(LOREBOARD_STORAGE_KEY)).assignment, 'Offline erhalten')
+  const update = cloud.calls.find(call => call.operation === 'update')
+  assert.deepEqual(update.filters, { id: 'board', user_id: 'u1', updated_at: '2026-01-01T00:00:00Z' })
+})

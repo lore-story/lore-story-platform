@@ -10,8 +10,41 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 })
 
+
+async function installSupabaseMock(page) {
+  await page.addInitScript(() => {
+    const listeners = new Set()
+    const user = { id: 'e2e-user', email: 'teacher@example.test' }
+    let session = localStorage.getItem('e2e-session') ? { user, access_token: 'mock' } : null
+    const notify = event => listeners.forEach(listener => listener(event, session))
+    const query = operation => {
+      const q = { filters: {}, payload: null, select() { return q }, eq(k,v) { q.filters[k]=v; return q }, order() { return q }, limit() { return q }, insert(v) { q.payload=v; operation='insert'; return q }, update(v) { q.payload=v; operation='update'; return q }, async maybeSingle() { return run() }, async single() { return run() }, then(resolve,reject) { return run().then(resolve,reject) } }
+      async function run() {
+        let row = JSON.parse(localStorage.getItem('e2e-cloud-row') || 'null')
+        if (operation === 'select') return { data: row, error: null }
+        if (operation === 'insert') { row={ id:'board-1', state:q.payload.state, updated_at:new Date().toISOString() }; localStorage.setItem('e2e-cloud-row',JSON.stringify(row)); return {data:row,error:null} }
+        if (!row || (q.filters.updated_at && q.filters.updated_at !== row.updated_at)) return {data:null,error:null}
+        row={...row,state:q.payload.state,updated_at:new Date(Date.now()+1).toISOString()};localStorage.setItem('e2e-cloud-row',JSON.stringify(row));return {data:{updated_at:row.updated_at},error:null}
+      }
+      return q
+    }
+    window.__LORE_SUPABASE__ = {
+      auth: {
+        async getSession() { return { data: { session }, error: null } },
+        onAuthStateChange(callback) { listeners.add(callback); return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } } },
+        async signInWithPassword({email,password}) { if(email!=='teacher@example.test'||password!=='secret12') return {data:{session:null},error:{message:'Invalid login credentials'}};session={user,access_token:'mock'};localStorage.setItem('e2e-session','1');notify('SIGNED_IN');return {data:{session},error:null} },
+        async signUp() { return {data:{session:null,user},error:null} },
+        async signOut() { session=null;localStorage.removeItem('e2e-session');notify('SIGNED_OUT');return {error:null} },
+      },
+      from() { return query('select') },
+    }
+  })
+}
+
 async function login(page) {
   await page.getByRole('button', { name: 'Einloggen', exact: true }).click()
+  await page.getByLabel('E-Mail-Adresse').fill('teacher@example.test')
+  await page.getByLabel('Passwort').fill('secret12')
   await page.locator('.login-modal .btn.dark').click()
   await page.getByRole('heading', { name: 'Deine Übersicht' }).waitFor()
 }
@@ -21,6 +54,7 @@ await mkdir('artifacts', { recursive: true })
 try {
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   desktop.setDefaultTimeout(8_000)
+  await installSupabaseMock(desktop)
   await desktop.goto(baseUrl, { waitUntil: 'networkidle' })
   await desktop.screenshot({ path: 'artifacts/landing-desktop.png', fullPage: true })
   await login(desktop)
@@ -52,7 +86,7 @@ try {
   assert.equal(await desktop.getByRole('button', { name: /Lernjournal/ }).count(), 0)
   assert.deepEqual(await desktop.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
   await desktop.getByRole('button', { name: 'Entdecken' }).click()
-  await desktop.getByText('Gespeichert', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   await desktop.reload({ waitUntil: 'networkidle' })
   assert.match(await desktop.locator('.loreboard-brand b').innerText(), /Entdecken/)
   assert.equal(await desktop.getByRole('button', { name: 'Entdecken' }).getAttribute('aria-pressed'), 'true')
@@ -65,7 +99,7 @@ try {
   await desktop.getByRole('button', { name: 'Speichern', exact: true }).click()
   assert.deepEqual(await desktop.locator('.material-list li').allTextContents(), ['Notizheft und Bleistift', 'Tablet oder Buch', 'Forscherkarten', 'Lupe'])
   assert.equal(await desktop.locator('.material-input').count(), 0)
-  await desktop.getByText('Gespeichert', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   await desktop.reload({ waitUntil: 'networkidle' })
   assert.deepEqual(await desktop.locator('.material-list li').allTextContents(), ['Notizheft und Bleistift', 'Tablet oder Buch', 'Forscherkarten', 'Lupe'])
   await desktop.getByRole('button', { name: 'Material bearbeiten' }).click()
@@ -82,12 +116,12 @@ try {
   await desktop.getByRole('button', { name: 'Auftrag bearbeiten' }).click()
   await desktop.getByLabel('Aktueller Auftrag bearbeiten').fill(assignment)
   await desktop.getByRole('button', { name: 'Auftrag speichern' }).click()
-  await desktop.getByText('Gespeichert', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   assert.match(await desktop.evaluate(() => localStorage.getItem('loreboard-state-v1')), new RegExp(assignment))
   await desktop.getByRole('button', { name: 'Tagesroute bearbeiten' }).click()
   await desktop.getByLabel('Routenpunkt 2', { exact: true }).fill('Gemeinsam entdecken')
   await desktop.getByRole('button', { name: 'Speichern', exact: true }).click()
-  await desktop.getByText('Gespeichert', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   assert.match(await desktop.evaluate(() => localStorage.getItem('loreboard-state-v1')), /Gemeinsam entdecken/)
   await desktop.getByRole('button', { name: /Timer-Einstellungen/ }).click()
   await desktop.getByLabel('Timer Minuten').fill('0')
@@ -101,7 +135,7 @@ try {
   assert.ok(Number((await desktop.locator('.timer-widget > strong').innerText()).split(':')[1]) <= 4)
   await desktop.getByRole('button', { name: 'Pausieren' }).click()
   const pausedTime = await desktop.locator('.timer-widget > strong').innerText()
-  await desktop.getByText('Gespeichert', { exact: true }).waitFor()
+  await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
   await desktop.reload({ waitUntil: 'networkidle' })
   await desktop.getByText('Pausiert').waitFor()
   await desktop.waitForTimeout(1100)
@@ -132,8 +166,9 @@ try {
 
   const projector = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   projector.setDefaultTimeout(8_000)
+  await installSupabaseMock(projector)
   await projector.goto(baseUrl, { waitUntil: 'networkidle' })
-  await projector.evaluate(() => localStorage.setItem('lore-state', JSON.stringify({ loggedIn: true, view: 'loreboard', fundus: ['moosarchiv'], activeStory: 'moosarchiv', activeWorld: 'nebelmark' })))
+  await projector.evaluate(() => { localStorage.setItem('e2e-session', '1'); localStorage.setItem('lore-state', JSON.stringify({ view: 'loreboard', fundus: ['moosarchiv'], activeStory: 'moosarchiv', activeWorld: 'nebelmark' })) })
   await projector.reload({ waitUntil: 'networkidle' })
   await projector.getByText('TAGESROUTE').waitFor()
   assert.deepEqual(await projector.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
@@ -144,6 +179,7 @@ try {
 
   const ipad = await browser.newPage({ viewport: { width: 1024, height: 1366 }, deviceScaleFactor: 1 })
   ipad.setDefaultTimeout(8_000)
+  await installSupabaseMock(ipad)
   await ipad.goto(baseUrl, { waitUntil: 'networkidle' })
   await ipad.evaluate(() => localStorage.clear())
   await ipad.reload({ waitUntil: 'networkidle' })
