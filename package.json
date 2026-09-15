@@ -8,11 +8,12 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "node --test",
-    "test:e2e": "node tests/e2e.mjs"
+    "test:e2e": "node tests/e2e.mjs && node tests/mission-e2e.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
     "lucide-react": "latest",
+    "qrcode": "^1.5.4",
     "react": "latest",
     "react-dom": "latest",
     "tslib": "^2.8.1",
