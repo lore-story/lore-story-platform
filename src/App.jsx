@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown, CirclePlay, Clock3, Compass, Feather, Gem, Library, ListChecks, LogOut, Maximize, Menu, PenLine, Play, Plus, RotateCcw, Save, Search, ShoppingBag, Sparkles, TimerReset, WandSparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown, CirclePlay, Clock3, Compass, Feather, Gem, Library, ListChecks, LogOut, Maximize, Menu, PenLine, Pause, Play, Plus, RotateCcw, Save, Search, Settings2, Trash2, ShoppingBag, Sparkles, TimerReset, WandSparkles, X } from 'lucide-react'
 import { stories, worlds } from './data'
 import { addStoryToFundus, readState } from './state'
 
@@ -56,39 +56,55 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setVi
   const world = worlds.find(item => item.id === activeWorld)
   const [now, setNow] = useState(new Date())
   const [assignment, setAssignment] = useState(() => localStorage.getItem('lore-assignment') || 'Findet heraus, wie Lebewesen im Wald miteinander verbunden sind.')
-  const [savedAssignment, setSavedAssignment] = useState(assignment)
+  const [assignmentDraft, setAssignmentDraft] = useState(assignment)
+  const [editingAssignment, setEditingAssignment] = useState(false)
   const [materials, setMaterials] = useState(() => { try { return JSON.parse(localStorage.getItem('lore-materials')) || [false, false, false] } catch { return [false, false, false] } })
+  const [route, setRoute] = useState(() => { try { const saved = JSON.parse(localStorage.getItem('lore-route')); return Array.isArray(saved) && saved.length ? saved : ['Ankommen', 'Entdecken', 'Vertiefen', 'Teilen'] } catch { return ['Ankommen', 'Entdecken', 'Vertiefen', 'Teilen'] } })
+  const [routeDraft, setRouteDraft] = useState(route)
+  const [editingRoute, setEditingRoute] = useState(false)
+  const [activeRoute, setActiveRoute] = useState(0)
   const [minutes, setMinutes] = useState(10)
   const [seconds, setSeconds] = useState(0)
   const [remaining, setRemaining] = useState(600)
   const [delay, setDelay] = useState(0)
   const [running, setRunning] = useState(false)
-  const [phase, setPhase] = useState('Ankommen & orientieren')
+  const [timerStarted, setTimerStarted] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [storyNotice, setStoryNotice] = useState(false)
 
   useEffect(() => { const clock = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(clock) }, [])
-  useEffect(() => { if (!running) return undefined; const timer = window.setInterval(() => setRemaining(value => { if (value <= 1) { setRunning(false); setPhase('Gemeinsamer Abschluss'); return 0 } return value - 1 }), 1000); return () => window.clearInterval(timer) }, [running])
-  useEffect(() => { if (!delay) return undefined; const countdown = window.setInterval(() => setDelay(value => { if (value <= 1) { window.clearInterval(countdown); setRunning(true); setPhase('Selbstständige Arbeitszeit'); return 0 } return value - 1 }), 1000); return () => window.clearInterval(countdown) }, [delay])
+  useEffect(() => { if (!running) return undefined; const timer = window.setInterval(() => setRemaining(value => { if (value <= 1) { setRunning(false); return 0 } return value - 1 }), 1000); return () => window.clearInterval(timer) }, [running])
+  useEffect(() => { if (!delay) return undefined; const countdown = window.setInterval(() => setDelay(value => { if (value <= 1) { window.clearInterval(countdown); setRunning(true); return 0 } return value - 1 }), 1000); return () => window.clearInterval(countdown) }, [delay])
 
-  const saveAssignment = () => { localStorage.setItem('lore-assignment', assignment); setSavedAssignment(assignment) }
+  const saveAssignment = () => { const clean = assignmentDraft.trim(); if (!clean) return; localStorage.setItem('lore-assignment', clean); setAssignment(clean); setAssignmentDraft(clean); setEditingAssignment(false) }
+  const cancelAssignment = () => { setAssignmentDraft(assignment); setEditingAssignment(false) }
+  const saveRoute = () => { const clean = routeDraft.map(item => item.trim()).filter(Boolean); if (!clean.length) return; localStorage.setItem('lore-route', JSON.stringify(clean)); setRoute(clean); setRouteDraft(clean); setActiveRoute(value => Math.min(value, clean.length - 1)); setEditingRoute(false) }
+  const cancelRoute = () => { setRouteDraft(route); setEditingRoute(false) }
   const toggleMaterial = index => setMaterials(current => { const next = current.map((item, itemIndex) => itemIndex === index ? !item : item); localStorage.setItem('lore-materials', JSON.stringify(next)); return next })
-  const resetTimer = () => { const value = Math.max(0, Number(minutes) * 60 + Number(seconds)); setRemaining(value); setRunning(false); setDelay(0); setPhase('Ankommen & orientieren') }
-  const startTimer = () => { if (remaining <= 0) resetTimer(); setDelay(3); setPhase('Start in Kürze') }
+  const timerValue = () => Math.max(0, Number(minutes) * 60 + Number(seconds))
+  const resetTimer = () => { setRemaining(timerValue()); setRunning(false); setTimerStarted(false); setDelay(0) }
+  const startTimer = () => { const next = remaining <= 0 ? timerValue() : remaining; if (next <= 0) return; setRemaining(next); setRunning(false); setTimerStarted(true); setDelay(2) }
+  const toggleTimer = () => { if (delay) setDelay(0); setRunning(value => !value) }
   const toggleFullscreen = async () => { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); else await document.exitFullscreen() }
   const time = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`
+  const timerStatus = delay ? `Start in ${delay}` : running ? 'Timer läuft' : remaining === 0 ? 'Zeit ist um' : 'Bereit'
 
   return <main className="loreboard-mode" style={{ '--lore-accent': world.colors[0], '--lore-deep': world.colors[1] }}>
     <div className="lore-ambient" />
     <header className="loreboard-topbar">
-      <div className="loreboard-brand"><span>{world.icon}</span><div><small>LOREBOARD · {world.name}</small><b>{phase}</b></div></div>
+      <div className="loreboard-brand"><span>{world.icon}</span><div><small>LOREBOARD · {world.name}</small><b>{route[activeRoute]}</b></div></div>
       <div className="live-clock"><Clock3/><div><strong>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</strong><small>{now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })}</small></div></div>
-      <div className="loreboard-controls"><button onClick={toggleFullscreen} aria-label="Vollbild öffnen"><Maximize/> Vollbild</button><button className="exit-board" onClick={()=>setView('overview')}><ArrowLeft/> Werkstatt</button></div>
+      <div className="loreboard-controls"><button onClick={toggleFullscreen} aria-label="Vollbild öffnen"><Maximize/> Vollbild</button><button className="exit-board" onClick={()=>setView('overview')}><ArrowLeft/> Zur Übersicht</button></div>
     </header>
-    <section className="route-strip" aria-label="Tagesroute"><span>TAGESROUTE</span>{['Ankommen','Entdecken','Vertiefen','Teilen'].map((item,index)=><div className={index === (running ? 2 : 0) ? 'active' : ''} key={item}><i>{index+1}</i>{item}</div>)}</section>
+    <section className={`route-strip ${editingRoute ? 'editing' : ''}`} aria-label="Tagesroute">
+      <div className="route-heading"><span>TAGESROUTE</span><button aria-label={editingRoute ? 'Bearbeitung der Tagesroute abbrechen' : 'Tagesroute bearbeiten'} onClick={() => editingRoute ? cancelRoute() : setEditingRoute(true)}>{editingRoute ? <X/> : <PenLine/>}</button></div>
+      {editingRoute ? <div className="route-editor">{routeDraft.map((item,index)=><div className="route-input" key={index}><i>{index+1}</i><input aria-label={`Routenpunkt ${index+1}`} value={item} onChange={event=>setRouteDraft(current=>current.map((value,itemIndex)=>itemIndex===index?event.target.value:value))}/><button aria-label={`Routenpunkt ${index+1} löschen`} onClick={()=>setRouteDraft(current=>current.filter((_,itemIndex)=>itemIndex!==index))} disabled={routeDraft.length===1}><Trash2/></button></div>)}<button className="route-add" onClick={()=>setRouteDraft(current=>[...current,'Neue Etappe'])}><Plus/> Etappe</button><button className="route-save" onClick={saveRoute}><Save/> Speichern</button></div> : <div className="route-items">{route.map((item,index)=><button className={index === activeRoute ? 'active' : ''} onClick={()=>setActiveRoute(index)} key={`${item}-${index}`} aria-pressed={index===activeRoute}><i>{index+1}</i>{item}</button>)}</div>}
+    </section>
     <section className="board-grid">
-      <article className="board-widget assignment-widget"><div className="widget-title"><PenLine/><span>AKTUELLER AUFTRAG</span>{savedAssignment===assignment&&<small><Check/> gespeichert</small>}</div><textarea aria-label="Aktueller Auftrag" value={assignment} onChange={event=>setAssignment(event.target.value)}/><button onClick={saveAssignment}><Save/> Auftrag speichern</button></article>
-      <article className="board-widget timer-widget"><div className="widget-title"><TimerReset/><span>TIMER</span><small>{delay ? `Start in ${delay}` : phase}</small></div><strong className={delay ? 'pulse' : ''}>{delay || time}</strong><div className="timer-settings"><label>Min.<input aria-label="Timer Minuten" type="number" min="0" max="180" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label><label>Sek.<input aria-label="Timer Sekunden" type="number" min="0" max="59" value={seconds} onChange={event=>setSeconds(event.target.value)}/></label><button aria-label="Timer übernehmen" onClick={resetTimer}><RotateCcw/></button></div><button className="timer-start" onClick={startTimer} disabled={running||delay>0}><Play/> Timer starten</button></article>
-      <article className="board-widget materials-widget"><div className="widget-title"><ListChecks/><span>MATERIALCHECK</span><small>{materials.filter(Boolean).length} / 3 bereit</small></div>{['Lernjournal & Stift','Forscherkarten','Tablet oder Buch'].map((item,index)=><button className={materials[index]?'ready':''} onClick={()=>toggleMaterial(index)} key={item}><CheckCircle2/><span>{item}</span><b>{materials[index]?'BEREIT':'FEHLT'}</b></button>)}</article>
-      <article className="board-widget story-launcher"><div className="widget-title"><Sparkles/><span>AKTIVE LORESTORY</span></div><div className="story-select"><span>{world.icon}</span><select aria-label="Aktive Lorestory" value={story.id} onChange={event=>setActiveStory(event.target.value)}>{available.map(item=><option value={item.id} key={item.id}>{item.title}</option>)}</select></div><p>{story.subject} · {story.age} Jahre · {story.duration}</p><button onClick={()=>setPhase(`Story: ${story.title}`)}><CirclePlay/> Story jetzt starten</button></article>
+      <article className="board-widget assignment-widget"><div className="widget-title"><PenLine/><span>AKTUELLER AUFTRAG</span><small><Check/> lokal gespeichert</small></div>{editingAssignment ? <><textarea autoFocus aria-label="Aktueller Auftrag bearbeiten" value={assignmentDraft} onChange={event=>setAssignmentDraft(event.target.value)}/><div className="assignment-actions"><button className="secondary-action" onClick={cancelAssignment}><X/> Abbrechen</button><button onClick={saveAssignment}><Save/> Auftrag speichern</button></div></> : <><p className="assignment-display">{assignment}</p><button onClick={()=>setEditingAssignment(true)}><PenLine/> Auftrag bearbeiten</button></>}</article>
+      <article className="board-widget timer-widget"><div className="widget-title"><TimerReset/><span>TIMER</span><small>{timerStatus}</small></div><strong className={delay ? 'pulse' : ''}>{delay || time}</strong><div className="timer-actions"><button className="timer-start" onClick={startTimer} disabled={running||delay>0}><Play/> {timerStarted ? 'Neu starten' : 'Starten'}</button><button onClick={toggleTimer} disabled={remaining<=0 || (!timerStarted && !delay)}>{running ? <><Pause/> Pausieren</> : <><Play/> Fortsetzen</>}</button><button onClick={resetTimer}><RotateCcw/> Zurücksetzen</button></div><button className="settings-toggle" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(value=>!value)}><Settings2/> Timer-Einstellungen <ChevronDown/></button>{settingsOpen&&<div className="timer-settings"><label>Minuten<input aria-label="Timer Minuten" type="number" min="0" max="180" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label><label>Sekunden<input aria-label="Timer Sekunden" type="number" min="0" max="59" value={seconds} onChange={event=>setSeconds(event.target.value)}/></label><button aria-label="Timer übernehmen" onClick={resetTimer}><Check/> Übernehmen</button></div>}</article>
+      <article className="board-widget materials-widget"><div className="widget-title"><ListChecks/><span>MATERIALCHECK</span><small className={materials.every(Boolean)?'all-ready':''}>{materials.filter(Boolean).length} / 3 bereit</small></div>{['Lernjournal & Stift','Forscherkarten','Tablet oder Buch'].map((item,index)=><button className={materials[index]?'ready':'missing'} onClick={()=>toggleMaterial(index)} key={item} aria-pressed={materials[index]}><span className="material-icon">{materials[index]?<CheckCircle2/>:<X/>}</span><span>{item}</span><b>{materials[index]?'BEREIT':'FEHLT'}</b></button>)}</article>
+      <article className="board-widget story-launcher"><div className="widget-title"><Sparkles/><span>AKTIVE LORESTORY</span></div><div className="story-select"><span>{world.icon}</span><select aria-label="Aktive Lorestory" value={story.id} onChange={event=>{setActiveStory(event.target.value);setStoryNotice(false)}}>{available.map(item=><option value={item.id} key={item.id}>{item.title}</option>)}</select></div><p>{story.subject} · {story.age} Jahre · {story.duration}</p><button onClick={()=>setStoryNotice(true)}><CirclePlay/> Storymodus öffnen</button>{storyNotice&&<div className="story-notice" role="status"><Sparkles/><span><b>Storymodus noch nicht angebunden</b>Die ausgewählte Story ist vorgemerkt. Der interaktive Storymodus folgt.</span></div>}</article>
     </section>
   </main>
 }
