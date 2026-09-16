@@ -94,3 +94,58 @@ html:has(.astra-shell),body:has(.astra-shell),#root:has(.astra-shell),html:has(.
 @media(max-width:1100px){.command-grid{grid-template-columns:23fr 52fr 25fr}.loreboard-mode.world-astra{padding:10px}.loreboard-mode.world-astra .loreboard-topbar{grid-template-columns:1fr auto}.loreboard-mode.world-astra .live-clock{display:none}.story-launcher{grid-template-columns:1fr auto}.story-launcher select{display:none}.story-launcher strong{font-size:15px}.nova-visual{min-height:110px}.nova-core{font-size:55px}.tools-column .timer-actions button{font-size:0}.tools-column .timer-actions svg{width:17px}.command-grid .route-items>button{min-height:52px}.astra-story .story-grid-layout{grid-template-columns:minmax(0,1fr) 280px}}
 .tools-column .timer-settings{position:static;margin:6px 0 0;padding:6px;background:#03101c;box-shadow:none}.tools-column .timer-settings label{color:#c7dbe4}
 @media(max-height:800px){.astra-lobby{padding:10px;gap:7px}.lobby-heading h1{font-size:36px}.lobby-heading p{font-size:13px}.join-signal{padding:7px}.join-signal img{width:260px;height:260px}.join-signal>strong{font-size:30px}.join-signal button{min-height:34px;padding:5px 10px}.crew-network{padding:12px}.launch-lobby{position:relative;z-index:3;min-height:38px!important;padding:8px 24px!important}}
+
+/* Astra typography: local Inter is imported from @fontsource-variable/inter. */
+.loreboard-mode.world-astra,
+.platform.world-astra,
+.astra-shell,
+.astra-student{font-family:Inter,sans-serif;line-height:1.45;letter-spacing:normal;font-weight:500}
+.loreboard-mode.world-astra *,
+.platform.world-astra *,
+.astra-shell *,
+.astra-student *{font-family:Inter,sans-serif!important}
+.loreboard-mode.world-astra h1,
+.loreboard-mode.world-astra h2,
+.loreboard-mode.world-astra .nova-core,
+.astra-shell h1,
+.astra-shell h2,
+.astra-student h1{font-weight:900;line-height:1.08}
+.loreboard-mode.world-astra h3,
+.loreboard-mode.world-astra strong,
+.platform.world-astra h1,
+.platform.world-astra h2,
+.platform.world-astra h3,
+.platform.world-astra strong,
+.astra-shell h3,
+.astra-shell strong,
+.astra-student h2,
+.astra-student strong{font-weight:800;line-height:1.2}
+.loreboard-mode.world-astra button,
+.platform.world-astra button,
+.astra-shell button,
+.astra-student button{font-weight:800;line-height:1.2}
+.loreboard-mode.world-astra small,
+.loreboard-mode.world-astra .widget-title,
+.loreboard-mode.world-astra .status,
+.platform.world-astra small,
+.platform.world-astra .status,
+.astra-shell small,
+.astra-shell .connection,
+.astra-shell .media-status,
+.astra-student small,
+.astra-student .connection,
+.astra-student .student-access-state{font-weight:800;line-height:1.2;text-transform:uppercase;letter-spacing:.12em}
+.loreboard-mode.world-astra p,
+.loreboard-mode.world-astra li,
+.platform.world-astra p,
+.platform.world-astra li,
+.astra-shell p,
+.astra-shell li,
+.astra-student p{font-weight:500;line-height:1.45}
+.loreboard-mode.world-astra .live-clock strong,
+.loreboard-mode.world-astra .timer-widget>strong,
+.astra-shell time,
+.astra-shell .scene-timer>strong,
+.astra-shell .code-mini b,
+.astra-shell .join-signal>strong,
+.astra-shell .qr-overlay strong{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace!important}

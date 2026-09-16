@@ -10,6 +10,19 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 })
 
+async function assertAstraTypography(page, rootSelector, headingSelector) {
+  const typography = await page.evaluate(({ rootSelector, headingSelector }) => {
+    const root = document.querySelector(rootSelector)
+    const heading = document.querySelector(headingSelector)
+    const forbidden = [...root.querySelectorAll('*')].filter(element => /Playfair Display|Georgia/i.test(getComputedStyle(element).fontFamily))
+    return { rootFamily: getComputedStyle(root).fontFamily, headingWeight: Number(getComputedStyle(heading).fontWeight), forbiddenCount: forbidden.length, interLoaded: document.fonts.check('500 16px Inter') && document.fonts.check('900 16px Inter') }
+  }, { rootSelector, headingSelector })
+  assert.match(typography.rootFamily, /Inter/i)
+  assert.ok(typography.headingWeight >= 800)
+  assert.equal(typography.forbiddenCount, 0)
+  assert.equal(typography.interLoaded, true)
+}
+
 
 async function installSupabaseMock(page) {
   await page.addInitScript(() => {
@@ -207,6 +220,7 @@ try {
   assert.equal(await projector.getByText('Freie Mission', { exact: true }).count(), 1)
   assert.equal(await projector.getByText('Aktuell in Astra inszeniert', { exact: true }).count(), 1)
   assert.equal(await projector.getByText('Astra-Mission', { exact: true }).count(), 0)
+  await assertAstraTypography(projector, '.loreboard-mode.world-astra', '.route-heading h2')
   await projector.getByText('Mission in dieser Welt noch nicht umgesetzt', { exact: true }).waitFor()
   assert.deepEqual(await projector.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
   assert.ok(await projector.locator('.assignment-widget').isVisible())

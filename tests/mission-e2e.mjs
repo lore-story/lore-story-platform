@@ -3,6 +3,18 @@ import chromiumBinary from '@sparticuz/chromium'
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:5173'
+async function assertAstraTypography(page, rootSelector, headingSelector) {
+  const typography = await page.evaluate(({ rootSelector, headingSelector }) => {
+    const root = document.querySelector(rootSelector)
+    const heading = document.querySelector(headingSelector)
+    const forbidden = [...root.querySelectorAll('*')].filter(element => /Playfair Display|Georgia/i.test(getComputedStyle(element).fontFamily))
+    return { rootFamily: getComputedStyle(root).fontFamily, headingWeight: Number(getComputedStyle(heading).fontWeight), forbiddenCount: forbidden.length, forbidden: forbidden.map(element => `${element.tagName}.${element.className}`), interLoaded: document.fonts.check('500 16px Inter') && document.fonts.check('900 16px Inter') }
+  }, { rootSelector, headingSelector })
+  assert.match(typography.rootFamily, /Inter/i)
+  assert.ok(typography.headingWeight >= 800)
+  assert.equal(typography.forbiddenCount, 0, typography.forbidden?.join(', '))
+  assert.equal(typography.interLoaded, true)
+}
 const backend = { version: 0, runs: [], participants: [], nextRun: 1, nextParticipant: 1, removals: {} }
 const codeFor = number => `ASTR${String(number).padStart(3, '0')}`
 function rpc(role, userId, name, args) {
@@ -91,6 +103,7 @@ try {
   await teacher.reload()
   await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click()
   await teacher.getByText('ASTR001', { exact: true }).waitFor()
+  await assertAstraTypography(teacher, '.astra-lobby', '.lobby-heading h1')
   await teacher.screenshot({ path: 'artifacts/astra-mission-lobby.png' })
   await teacher.getByRole('button', { name: 'QR-Code groß anzeigen' }).click()
   await teacher.getByRole('dialog', { name: 'QR-Code groß anzeigen' }).screenshot({ path: 'artifacts/astra-qr-large.png' })
@@ -99,6 +112,7 @@ try {
   const joinUrl = `${baseUrl}/join/ASTR001`
   const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl)
   await studentOne.locator('.astra-student').waitFor()
+  await assertAstraTypography(studentOne, '.astra-student', '.join-card h1')
   assert.equal(await studentOne.getByText('LORE ASTRA').isVisible(), true)
   await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).click(); await studentOne.getByRole('button', { name: /Mit Astrofuchs/ }).click()
   await studentOne.getByText('Warte bitte').waitFor()
