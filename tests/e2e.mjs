@@ -73,6 +73,9 @@ try {
   await desktop.goto(baseUrl, { waitUntil: 'networkidle' })
   await desktop.screenshot({ path: 'artifacts/landing-desktop.png', fullPage: true })
   await login(desktop)
+  assert.equal(await desktop.locator('.profile>span').innerText(), 'TE')
+  assert.equal(await desktop.locator('.avatar').count(), 0)
+  await desktop.screenshot({ path: 'artifacts/overview-desktop.png', fullPage: true })
 
   const destinations = [
     ['Werkstatt', 'Werkstatt'],

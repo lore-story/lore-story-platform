@@ -35,12 +35,11 @@ function rpc(role, userId, name, args) {
   if (name === 'join_mission') {
     if (!run) return fail('INVALID_CODE')
     const own = backend.participants.find(item => item.session_id === run.id && item.userId === userId)
-    if (own?.status === 'removed') return fail('PARTICIPANT_REMOVED')
     if (run.status === 'completed') return fail('MISSION_COMPLETED')
-    if (!own && !run.joining_open) return fail('JOINING_CLOSED')
-    if (!own && backend.participants.some(item => item.session_id === run.id && item.status !== 'removed' && item.callsign === args.p_callsign)) return fail('CALLSIGN_TAKEN')
+    if ((!own || own.status === 'removed') && !run.joining_open) return fail('JOINING_CLOSED')
+    if ((!own || own.status === 'removed') && backend.participants.some(item => item.session_id === run.id && item.status !== 'removed' && item.callsign === args.p_callsign)) return fail('CALLSIGN_TAKEN')
     const participant = own || { id: `participant-${backend.nextParticipant++}`, session_id: run.id, userId, callsign: args.p_callsign, status: 'connected', ready_scene_id: null, joined_at: new Date().toISOString(), removed_at: null }
-    participant.status = 'connected'; participant.last_seen_at = new Date().toISOString(); if (!own) backend.participants.push(participant); backend.version++
+    participant.callsign = args.p_callsign; participant.status = 'connected'; participant.ready_scene_id = null; participant.removed_at = null; participant.last_seen_at = new Date().toISOString(); if (!own) backend.participants.push(participant); backend.version++
     return { data: [{ ...run, session_id: run.id, participant_id: participant.id, callsign: participant.callsign, ready_scene_id: participant.ready_scene_id }], error: null }
   }
   if (name === 'set_mission_scene') {
@@ -112,6 +111,7 @@ try {
   const joinUrl = `${baseUrl}/join/ASTR001`
   const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl)
   await studentOne.locator('.astra-student').waitFor()
+  await studentOne.screenshot({ path: 'artifacts/astra-student-join.png' })
   await assertAstraTypography(studentOne, '.astra-student', '.join-card h1')
   assert.equal(await studentOne.getByText('LORE ASTRA').isVisible(), true)
   await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).click(); await studentOne.getByRole('button', { name: /Mit Astrofuchs/ }).click()
@@ -134,7 +134,9 @@ try {
   assert.equal(await crewManager.getByText('Nicht bereit', { exact: true }).isVisible(), true)
   teacher.once('dialog', dialog => dialog.accept())
   await crewManager.getByRole('button', { name: /Entfernen/, exact: true }).click()
-  await studentOne.getByText('Zugang nicht möglich').waitFor()
+  await studentOne.getByText('Du wurdest aus der Crew entfernt').waitFor()
+  await studentOne.screenshot({ path: 'artifacts/astra-student-removed.png' })
+  assert.equal(await studentOne.getByRole('button', { name: /Erneut beitreten/ }).isDisabled(), true)
   await teacher.locator('.astra-story>header').getByText('0 Crewmitglieder', { exact: true }).waitFor()
   await crewManager.locator('summary').click()
 
@@ -142,6 +144,18 @@ try {
   assert.equal(await teacher.getByText('Zugang geschlossen', { exact: true }).isVisible(), true)
   await teacher.getByRole('button', { name: 'Zugang öffnen', exact: true }).click()
   await teacher.getByText('Zugang geöffnet', { exact: true }).waitFor()
+  await studentOne.reload()
+  await studentOne.getByRole('button', { name: /Erneut beitreten/ }).click()
+  assert.equal(await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).isEnabled(), true)
+  assert.equal(await studentOne.getByText('Willkommen in der Crew-Akademie').count(), 0)
+  await studentOne.getByRole('button', { name: 'Blitzbär', exact: true }).click()
+  await studentOne.getByRole('button', { name: /Mit Blitzbär/ }).click()
+  await studentOne.getByText('Willkommen in der Crew-Akademie').waitFor()
+  teacher.once('dialog', dialog => dialog.accept())
+  await teacher.getByText('Crew verwalten').click()
+  await teacher.locator('.crew-manager').getByRole('button', { name: /Entfernen/, exact: true }).click()
+  await studentOne.getByText('Du wurdest aus der Crew entfernt').waitFor()
+  await teacher.locator('.crew-manager summary').click()
   const studentTwo = await newStudentContext.newPage(); await studentTwo.goto(joinUrl)
   assert.equal(await studentTwo.getByRole('button', { name: 'Astrofuchs', exact: true }).isEnabled(), true)
   await studentTwo.getByRole('button', { name: 'Astrofuchs', exact: true }).click()

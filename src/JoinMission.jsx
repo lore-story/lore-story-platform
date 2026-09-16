@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Check, Radio, Rocket, Wifi, WifiOff } from 'lucide-react'
+import { ArrowLeft, Check, Radio, RefreshCw, Rocket, Wifi, WifiOff } from 'lucide-react'
 import { createLiveController, HEARTBEAT_INTERVAL_MS, joinBlockedReason, logMissionError, missionErrorMessage, STORY_SLUG } from './mission'
 import { getMissionPackage, themeVariables } from './worldThemes'
 
@@ -137,9 +137,17 @@ export default function JoinMission({ supabase, code }) {
     else setInfo(current => ({ ...current, ready_scene_id: readyValue ? current.current_scene_id : null }))
   }
 
+  const retryAfterRemoval = () => {
+    window.localStorage.removeItem(`mission-callsign:${normalized}`)
+    setChosen('')
+    setInfo(current => ({ ...current, participant_id: null, participant_status: null, callsign: null, ready_scene_id: null }))
+    setMessage(info?.joining_open ? '' : 'Der Zugang ist geschlossen. Bitte warte, bis deine Lehrkraft ihn öffnet.')
+    if (info?.joining_open) setScreen('choose')
+  }
+
   if (teacherBrowser || screen === 'teacher') return <main className={themedPage} style={themeVariables(theme)}><div className="join-card"><Rocket/><h1>Schülerzugang</h1><p>Dieser Browser ist als Lehrkraft angemeldet. Öffne den Schülerzugang auf einem Schülergerät oder in einem privaten Browserfenster.</p><a className="join-back" href="/"><ArrowLeft/> Zurück zum Loreboard</a></div></main>
   if (screen === 'loading') return <main className={themedPage} style={themeVariables(theme)}><div className="join-card"><Rocket/><h1>Mission wird gesucht …</h1></div></main>
-  if (screen === 'error' || screen === 'removed') return <main className={themedPage} style={themeVariables(theme)}><div className="join-card"><WifiOff/><h1>Zugang nicht möglich</h1><p role="alert">{message}</p>{screen === 'error' && <button onClick={() => inspect()}>Erneut versuchen</button>}</div></main>
+  if (screen === 'error' || screen === 'removed') return <main className={themedPage} style={themeVariables(theme)}><div className="join-card removed-card"><WifiOff/><h1>{screen === 'removed' ? 'Du wurdest aus der Crew entfernt' : 'Zugang nicht möglich'}</h1><p role="alert">{message}</p>{screen === 'error' ? <button onClick={() => inspect()}>Erneut versuchen</button> : <button className="primary" disabled={!info?.joining_open} onClick={retryAfterRemoval}><RefreshCw/> Erneut beitreten</button>}{screen === 'removed' && !info?.joining_open && <p className="join-block-reason">Der Zugang ist geschlossen. Bitte warte auf deine Lehrkraft.</p>}</div></main>
   if (screen === 'choose') { const blocked=joinBlockedReason(info,chosen); return <main className={themedPage} style={themeVariables(theme)}><div className="join-card wide"><Rocket/><small>LORE {theme.name.toUpperCase()}</small><h1>{info.title}</h1><p>Wähle dein anonymes Rufzeichen. Es werden keine Namen benötigt.</p><div className="callsign-grid">{info.callsigns.map(name => <button key={name} disabled={info.taken_callsigns.includes(name)} className={chosen === name ? 'selected' : ''} onClick={() => setChosen(name)}>{name}{info.taken_callsigns.includes(name) && <small>belegt</small>}</button>)}</div>{message && <p role="alert">{message}</p>}{blocked&&<p className="join-block-reason" role="status">{blocked}</p>}<button className="primary" disabled={Boolean(blocked)} title={blocked||undefined} onClick={() => join(chosen)}>Mit {chosen || 'Rufzeichen'} beitreten</button></div></main> }
   const active = info.status === 'active' || info.status === 'paused'
   const completed = info.status === 'completed'

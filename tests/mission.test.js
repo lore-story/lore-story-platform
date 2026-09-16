@@ -94,3 +94,14 @@ test('all corrected mission RPCs retain hardening and explicit conflict detectio
   assert.match(sql, /revoke all on function[\s\S]+from public,anon;/i)
   assert.match(sql, /grant execute on function[\s\S]+to authenticated;/i)
 })
+
+test('rejoin migration safely reactivates removed anonymous participants only while joining is open', async () => {
+  const sql = await readFile(new globalThis.URL('../supabase/migrations/202609160002_allow_removed_participant_rejoin.sql', import.meta.url), 'utf8')
+  assert.match(sql, /v_participant\.status='removed'/)
+  assert.match(sql, /if not v_session\.joining_open then raise exception/)
+  assert.match(sql, /callsign=v_callsign,status='connected',ready_scene_id=null,last_seen_at=pg_catalog\.now\(\),removed_at=null/)
+  assert.match(sql, /if v_session\.status='completed' then raise exception/)
+  assert.match(sql, /exception when unique_violation then raise exception/)
+  assert.match(sql, /revoke all on function[\s\S]+from public,anon;/i)
+  assert.match(sql, /grant execute on function[\s\S]+to authenticated;/i)
+})
