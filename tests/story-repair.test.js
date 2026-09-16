@@ -16,6 +16,7 @@ test('world-bound and independent story categories enforce availability', () => 
 test('join blocks expose concrete domain reasons and allow a free callsign', () => {
   const base={status:'lobby',joining_open:true,taken_callsigns:['Nova']}
   assert.equal(joinBlockedReason(base,'Cosmo'),'')
+  assert.equal(joinBlockedReason({...base,status:'paused'},'Cosmo'),'')
   assert.match(joinBlockedReason({...base,joining_open:false},'Cosmo'),/Lehrkraft/)
   assert.match(joinBlockedReason(base,'Nova'),/bereits vergeben/)
   assert.match(joinBlockedReason({...base,status:'completed'},'Cosmo'),/beendet/)
@@ -56,4 +57,13 @@ test('Astra contrast tokens meet AA-oriented dark palette contract', async () =>
   assert.match(theme,/muted: '#8ca9b9'/)
   const css=await readFile(new globalThis.URL('../src/styles.css',import.meta.url),'utf8')
   assert.match(css,/\.loreboard-mode\.world-astra[\s\S]*var\(--world-text\)/)
+})
+
+test('running mission keeps crew and access controls until final confirmation', async () => {
+  const source=await readFile(new globalThis.URL('../src/MissionLobby.jsx',import.meta.url),'utf8')
+  assert.match(source,/CrewManager compact/)
+  assert.match(source,/person\.ready_scene_id === currentSceneId/)
+  assert.match(source,/session\.joining_open\?'Zugang geöffnet':'Zugang geschlossen'/)
+  assert.match(source,/session\.joining_open\?'close_joining':'open_joining'/)
+  assert.match(source,/finished \? <button[\s\S]*Mission endgültig abschließen[\s\S]*CrewManager compact/)
 })

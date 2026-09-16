@@ -40,7 +40,7 @@ export function joinBlockedReason(info, chosen = '') {
   if (info.participant_status === 'removed') return 'Dieses Gerät wurde aus der Mission entfernt.'
   if (info.status === 'completed') return 'Die Mission ist bereits beendet.'
   if (!info.joining_open) return 'Die Lehrkraft hat den Zugang noch nicht geöffnet.'
-  if (!['lobby', 'active'].includes(info.status)) return 'Die Mission nimmt momentan keine neuen Crewmitglieder auf.'
+  if (!['lobby', 'active', 'paused'].includes(info.status)) return 'Die Mission nimmt momentan keine neuen Crewmitglieder auf.'
   if (!chosen) return 'Bitte wähle zuerst ein freies Rufzeichen.'
   if (info.taken_callsigns?.includes(chosen)) return 'Dieses Rufzeichen ist bereits vergeben.'
   return ''

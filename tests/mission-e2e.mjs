@@ -50,6 +50,12 @@ function rpc(role, userId, name, args) {
     if (args.p_action === 'complete') { run.status = 'completed'; run.joining_open = false; run.completed_at = new Date().toISOString() }
     backend.version++; return { data: [run], error: null }
   }
+  if (name === 'remove_disconnected_mission_participants') {
+    if (!run || role !== 'teacher') return fail('MISSION_FORBIDDEN')
+    const cutoff = Date.now() - 70_000; let removed = 0
+    backend.participants.filter(item => item.session_id === run.id && item.status !== 'removed' && new Date(item.last_seen_at).getTime() < cutoff).forEach(item => { item.status = 'removed'; item.removed_at = new Date().toISOString(); item.ready_scene_id = null; removed++ })
+    backend.version++; return { data: [{ removed_count: removed }], error: null }
+  }
   if (name === 'remove_mission_participant') {
     const participant = backend.participants.find(item => item.id === args.p_participant_id)
     if (!participant || role !== 'teacher') return fail('PARTICIPANT_REMOVE_FORBIDDEN')
@@ -93,12 +99,50 @@ try {
   await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).click(); await studentOne.getByRole('button', { name: /Mit Astrofuchs/ }).click()
   await studentOne.getByText('Warte bitte').waitFor()
 
-  const studentTwo = await studentTwoContext.newPage(); await studentTwo.goto(joinUrl)
-  await studentTwo.getByRole('button', { name: 'Blitzbär', exact: true }).click(); await studentTwo.getByRole('button', { name: /Mit Blitzbär/ }).click()
   teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Mission starten' }).click()
   await teacher.getByText('Willkommen in der Crew-Akademie').waitFor()
   assert.equal(backend.runs[0].status, 'active')
   await studentOne.getByText('Willkommen in der Crew-Akademie').waitFor()
+
+
+  // A stale participant remains manageable after mission start. Old-scene readiness must not count.
+  backend.participants[0].status = 'disconnected'
+  backend.participants[0].last_seen_at = new Date(Date.now() - 86_400_000).toISOString()
+  backend.participants[0].ready_scene_id = 'navigation'
+  backend.version++
+  await teacher.getByText('Crew verwalten').click()
+  const crewManager = teacher.locator('.crew-manager')
+  await crewManager.getByText('Getrennt', { exact: true }).waitFor()
+  assert.equal(await crewManager.getByText('Nicht bereit', { exact: true }).isVisible(), true)
+  teacher.once('dialog', dialog => dialog.accept())
+  await crewManager.getByRole('button', { name: /Entfernen/, exact: true }).click()
+  await studentOne.getByText('Zugang nicht möglich').waitFor()
+  await teacher.locator('.astra-story>header').getByText('0 Crewmitglieder', { exact: true }).waitFor()
+  await crewManager.locator('summary').click()
+
+  // Access control is independent and allows a fresh anonymous device into the active scene.
+  assert.equal(await teacher.getByText('Zugang geschlossen', { exact: true }).isVisible(), true)
+  await teacher.getByRole('button', { name: 'Zugang öffnen', exact: true }).click()
+  await teacher.getByText('Zugang geöffnet', { exact: true }).waitFor()
+  const studentTwo = await newStudentContext.newPage(); await studentTwo.goto(joinUrl)
+  assert.equal(await studentTwo.getByRole('button', { name: 'Astrofuchs', exact: true }).isEnabled(), true)
+  await studentTwo.getByRole('button', { name: 'Astrofuchs', exact: true }).click()
+  assert.equal(await studentTwo.getByRole('button', { name: /Mit Astrofuchs/ }).isEnabled(), true)
+  await studentTwo.getByRole('button', { name: /Mit Astrofuchs/ }).click()
+  await studentTwo.getByText('Willkommen in der Crew-Akademie').waitFor()
+  assert.equal(await studentTwo.getByText('Zugang geöffnet', { exact: true }).isVisible(), true)
+  await teacher.locator('.astra-story>header').getByText('1 Crewmitglied', { exact: true }).waitFor()
+  await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click()
+  await studentTwo.getByText('Übertragung pausiert').waitFor()
+  assert.equal(backend.runs[0].joining_open, true)
+  assert.equal(await teacher.getByText('Zugang geöffnet', { exact: true }).isVisible(), true)
+  await teacher.getByRole('button', { name: 'Zugang schließen', exact: true }).click()
+  assert.equal(backend.runs[0].status, 'paused')
+  assert.equal(backend.runs[0].joining_open, false)
+  await teacher.getByRole('button', { name: /Geräte fortsetzen/ }).click()
+  await studentTwo.getByText('Willkommen in der Crew-Akademie').waitFor()
+  assert.equal(backend.runs[0].joining_open, false)
+  await studentTwo.getByText('Zugang geschlossen', { exact: true }).waitFor()
 
   assert.equal(await teacher.getByText('10:00', { exact: true }).isVisible(), true)
   await teacher.getByRole('button', { name: 'Eine Minute abziehen' }).click(); await teacher.getByText('09:00', { exact: true }).waitFor()
@@ -109,23 +153,26 @@ try {
   await teacher.getByRole('button', { name: 'Szenentimer zurücksetzen' }).click(); await teacher.getByText('09:00', { exact: true }).waitFor()
 
   await teacher.locator('.scene-actions').getByRole('button', { name: /Zur Erinnerungsübertragung/ }).click()
-  await teacher.getByText('Das Echo der Erinnerungen').waitFor(); await studentOne.getByText('Das Echo der Erinnerungen').waitFor()
+  await teacher.getByRole('heading', { name: 'Das Echo der Erinnerungen', exact: true }).waitFor(); await studentTwo.getByText('Das Echo der Erinnerungen').waitFor()
   await teacher.getByRole('button', { name: 'NOVA-Erinnerungsrad' }).click(); await teacher.getByRole('dialog').waitFor(); await teacher.getByRole('button', { name: 'Erinnerungsrad schließen' }).click()
   await teacher.locator('.scene-actions').getByRole('button', { name: /Signalfragmente sichern/ }).click()
-  await studentOne.getByText('Wer gehört zur Crew?').waitFor(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('1 von 2 bereit', { exact: true }).waitFor()
-  await teacher.getByRole('button', { name: /Bereitschaft zurücksetzen/ }).click(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).waitFor()
-  await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click(); await studentOne.getByText('Übertragung pausiert').waitFor()
-  await teacher.getByRole('button', { name: /Geräte fortsetzen/ }).click(); await studentOne.getByText('Wer gehört zur Crew?').waitFor()
-  await teacher.locator('.scene-actions').getByRole('button', { name: 'Zurück' }).click(); await teacher.getByText('Das Echo der Erinnerungen').waitFor()
+  await studentTwo.getByText('Wer gehört zur Crew?').waitFor(); await studentTwo.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('Vollständig', { exact: true }).waitFor()
+  await teacher.getByRole('button', { name: /Bereitschaft zurücksetzen/ }).click(); await studentTwo.getByRole('button', { name: 'Ich bin bereit' }).waitFor()
+  await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click(); await studentTwo.getByText('Übertragung pausiert').waitFor()
+  await teacher.getByRole('button', { name: /Geräte fortsetzen/ }).click(); await studentTwo.getByText('Wer gehört zur Crew?').waitFor()
+  await teacher.locator('.scene-actions').getByRole('button', { name: 'Zurück' }).click(); await teacher.getByRole('heading', { name: 'Das Echo der Erinnerungen', exact: true }).waitFor()
   await teacher.locator('.scene-actions').getByRole('button', { name: /Signalfragmente sichern/ }).click()
 
   for (const actionName of ['Crew-Check abschließen','Flugplan bestätigen','Archiv schließen','Module ausgeben','Ausrüstung bestätigen']) {
     await teacher.locator('.scene-actions').getByRole('button', { name: new RegExp(actionName) }).click()
   }
-  await teacher.getByText('Die Reise beginnt').waitFor(); await studentTwo.getByText('Die Reise beginnt').waitFor()
+  await teacher.getByRole('heading', { name: 'Die Reise beginnt', exact: true }).waitFor(); await studentTwo.getByText('Die Reise beginnt').waitFor()
+  assert.equal(await teacher.getByText('Crew verwalten').isVisible(), true)
+  await teacher.getByText('Crew verwalten').click(); assert.equal(await teacher.locator('.crew-manager').getByText('Astrofuchs', { exact: true }).isVisible(), true)
   for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366}]) {
-    await teacher.setViewportSize(viewport); assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
+    await teacher.setViewportSize(viewport); await teacher.screenshot({ path: `artifacts/astra-runtime-${viewport.width}x${viewport.height}.png` }); assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
   }
+  await teacher.locator('.crew-manager summary').click()
   await teacher.locator('.scene-actions').getByRole('button', { name: /Countdown starten/ }).click()
   await teacher.getByText('10', { exact: true }).waitFor(); await teacher.getByText('0', { exact: true }).waitFor({ timeout: 13000 })
   await teacher.locator('.media-fallback').waitFor({ timeout: 5000 })
