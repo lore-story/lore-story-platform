@@ -26,7 +26,7 @@ export const CALLSIGNS = Object.freeze(['Astrofuchs','Blitzbär','Cosmo','Dämme
 
 export const missionErrorMessage = error => ({
   INVALID_CODE: 'Dieser Sitzungscode ist ungültig oder abgelaufen.',
-  JOINING_CLOSED: 'Der Zugang zu dieser Mission ist gerade geschlossen.',
+  JOINING_CLOSED: 'Die Lehrkraft hat den Zugang noch nicht geöffnet.',
   CALLSIGN_TAKEN: 'Dieses Rufzeichen wurde gerade vergeben. Bitte wähle ein anderes.',
   INVALID_CALLSIGN: 'Dieses Rufzeichen kann nicht verwendet werden.',
   PARTICIPANT_REMOVED: 'Du wurdest aus dieser Mission entfernt. Bitte wende dich an die Lehrkraft.',
@@ -34,6 +34,17 @@ export const missionErrorMessage = error => ({
   ANONYMOUS_AUTH_REQUIRED: 'Der anonyme Zugang konnte nicht hergestellt werden.',
   OPEN_SESSION_EXISTS: 'Für dieses Loreboard ist bereits eine offene Missionssitzung vorhanden.',
 }[error?.message] || 'Die Mission konnte wegen eines technischen Fehlers nicht geladen werden. Bitte versuche es erneut oder informiere deine Lehrkraft.')
+
+export function joinBlockedReason(info, chosen = '') {
+  if (!info) return 'Die Missionsdaten werden noch geladen.'
+  if (info.participant_status === 'removed') return 'Dieses Gerät wurde aus der Mission entfernt.'
+  if (info.status === 'completed') return 'Die Mission ist bereits beendet.'
+  if (!info.joining_open) return 'Die Lehrkraft hat den Zugang noch nicht geöffnet.'
+  if (!['lobby', 'active'].includes(info.status)) return 'Die Mission nimmt momentan keine neuen Crewmitglieder auf.'
+  if (!chosen) return 'Bitte wähle zuerst ein freies Rufzeichen.'
+  if (info.taken_callsigns?.includes(chosen)) return 'Dieses Rufzeichen ist bereits vergeben.'
+  return ''
+}
 
 export function logMissionError(operation, error) {
   console.error(`[Mission] ${operation} fehlgeschlagen`, error)
@@ -67,6 +78,7 @@ export function createMissionRepository(client) {
       const { error } = await client.rpc('remove_mission_participant', { p_participant_id: id })
       if (error) throw error
     },
+    removeDisconnected: sessionId => rpcOne('remove_disconnected_mission_participants', { p_session_id: sessionId }),
     subscribe(id, onChange, onStatus) {
       const channel = client.channel(`mission:${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'mission_sessions', filter: `id=eq.${id}` }, onChange).on('postgres_changes', { event: '*', schema: 'public', table: 'mission_participants', filter: `session_id=eq.${id}` }, onChange).subscribe(onStatus)
       return () => client.removeChannel(channel)
@@ -76,3 +88,11 @@ export function createMissionRepository(client) {
 
 export const isParticipantConnected = (participant, now = Date.now()) => participant.status === 'connected' && now - new Date(participant.last_seen_at).getTime() <= PRESENCE_TIMEOUT_MS
 export const readyCount = (participants, scene) => participants.filter(participant => participant.status !== 'removed' && participant.ready_scene_id === scene).length
+export const crewLabel = count => `${count} ${count === 1 ? 'Crewmitglied' : 'Crewmitglieder'}`
+export const readinessLabel = (participants, scene) => {
+  if (!scene?.readinessRequired) return null
+  const active = participants.filter(person => person.status !== 'removed')
+  const count = readyCount(active, scene.id)
+  if (!active.length) return 'Noch nicht begonnen'
+  return count === active.length ? 'Vollständig' : `${count} von ${active.length} bereit`
+}

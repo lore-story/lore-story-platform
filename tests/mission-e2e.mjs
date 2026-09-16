@@ -108,11 +108,11 @@ try {
   await teacher.locator('.scene-timer').getByRole('button', { name: 'Fortsetzen', exact: true }).click()
   await teacher.getByRole('button', { name: 'Szenentimer zurücksetzen' }).click(); await teacher.getByText('09:00', { exact: true }).waitFor()
 
-  await teacher.locator('.scene-actions').getByRole('button', { name: /Mission starten/ }).click()
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Zur Erinnerungsübertragung/ }).click()
   await teacher.getByText('Das Echo der Erinnerungen').waitFor(); await studentOne.getByText('Das Echo der Erinnerungen').waitFor()
   await teacher.getByRole('button', { name: 'NOVA-Erinnerungsrad' }).click(); await teacher.getByRole('dialog').waitFor(); await teacher.getByRole('button', { name: 'Erinnerungsrad schließen' }).click()
   await teacher.locator('.scene-actions').getByRole('button', { name: /Signalfragmente sichern/ }).click()
-  await studentOne.getByText('Wer gehört zur Crew?').waitFor(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('1 / 2', { exact: true }).waitFor()
+  await studentOne.getByText('Wer gehört zur Crew?').waitFor(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('1 von 2 bereit', { exact: true }).waitFor()
   await teacher.getByRole('button', { name: /Bereitschaft zurücksetzen/ }).click(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).waitFor()
   await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click(); await studentOne.getByText('Übertragung pausiert').waitFor()
   await teacher.getByRole('button', { name: /Geräte fortsetzen/ }).click(); await studentOne.getByText('Wer gehört zur Crew?').waitFor()
