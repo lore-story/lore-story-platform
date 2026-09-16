@@ -8,8 +8,8 @@ export const ASTRA_SCENES = Object.freeze([
   { id: 'sicherheitscheck', label: 'Szene 7 · Sicherheitscheck', title: 'Ist alles vollständig?', message: 'Prüft sorgfältig. Fehlende Gegenstände müssen im Ausrüstungsprotokoll vermerkt werden.', action: 'Ausrüstung bestätigen', task: 'Prüft eure Ausrüstung und meldet euch bereit.', ready: true, status: 'Ausrüstung' },
   { id: 'startfreigabe', label: 'Szene 8 · Startfreigabe', title: 'Die Reise beginnt', message: 'Crew: Registrierung abgeschlossen. Flugplan aktiviert. Ausrüstung bestätigt. Willkommen an Bord der Astra.', action: 'Countdown starten', task: 'Bestätigt eure Startbereitschaft.', ready: true, status: 'Startfreigabe' },
 ])
-export const sceneById = id => ASTRA_SCENES.find(scene => scene.id === id) || ASTRA_SCENES[0]
-export const sceneIndex = id => Math.max(0, ASTRA_SCENES.findIndex(scene => scene.id === id))
+export const sceneById = (id, scenes = ASTRA_SCENES) => scenes.find(scene => scene.id === id) || scenes[0]
+export const sceneIndex = (id, scenes = ASTRA_SCENES) => Math.max(0, scenes.findIndex(scene => scene.id === id))
 
 export const MEMORY_PROMPTS = Object.freeze([
   ['Crewbericht', 'Berichtet euch gegenseitig von einem besonderen Ferienmoment.'],

@@ -1,6 +1,6 @@
 export const DEFAULT_STATE = Object.freeze({
   view: 'overview',
-  fundus: ['moosarchiv'],
+  fundus: ['moosarchiv', 'notruf-aus-dem-all'],
   activeStory: 'moosarchiv',
   activeWorld: 'nebelmark',
 })

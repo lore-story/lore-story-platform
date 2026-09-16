@@ -1,3 +1,5 @@
+import { ASTRA_SCENES, MEMORY_PROMPTS } from './astraMission.js'
+
 export const WORLD_THEMES = Object.freeze({
   astra: Object.freeze({
     id: 'astra', name: 'Astra', typography: { display: '"Arial Narrow", Inter, sans-serif', body: 'Inter, sans-serif' },
@@ -7,10 +9,16 @@ export const WORLD_THEMES = Object.freeze({
     media: { scenePattern: '/media/astra/scene-{scene}.webm', launch: '/media/astra/launch-final.mp4', poster: '/media/astra/launch-poster.webp' },
     terms: { participants: 'Crew', participant: 'Crewmitglied', callsign: 'Rufzeichen', network: 'Crew-Netzwerk', progress: 'Missionsfortschritt' },
     layouts: { loreboard: 'astra-command', lobby: 'astra-dock', story: 'astra-flightdeck', student: 'astra-terminal' },
+    mission: Object.freeze({
+      storySlug: 'lore-astra-notruf-aus-dem-all', storyId: 'notruf-aus-dem-all', title: 'Notruf aus dem All',
+      scenes: ASTRA_SCENES, memoryPrompts: MEMORY_PROMPTS,
+      labels: { assistant: 'NOVA', lobby: 'MISSIONSBEREITSCHAFT · DOCK 07', start: 'Mission starten', feedback: 'Feedback-Archiv' },
+    }),
   }),
 })
 
 export const getWorldTheme = id => WORLD_THEMES[id] || null
+export const getMissionPackage = storySlug => { const theme = Object.values(WORLD_THEMES).find(item => item.mission?.storySlug === storySlug); return theme ? { ...theme.mission, worldId: theme.id, theme } : null }
 export const themeVariables = theme => theme ? {
   '--world-void': theme.colors.void, '--world-panel': theme.colors.panel, '--world-panel-solid': theme.colors.panelSolid,
   '--world-cyan': theme.colors.cyan, '--world-orange': theme.colors.orange, '--world-text': theme.colors.text,

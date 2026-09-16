@@ -27,7 +27,11 @@ export function createSupabaseLoreboardRepository(client, user, storage = window
   let revision = null
   let queue = Promise.resolve()
   const repository = { offline: false, load, save }
-  async function load() {
+  function load() {
+    queue = queue.catch(() => undefined).then(loadNow)
+    return queue
+  }
+  async function loadNow() {
     let result
     try { result = await client.from('loreboards').select('id,state,updated_at').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(1).maybeSingle() } catch { repository.offline = true; return local.load() }
     const { data, error } = result
