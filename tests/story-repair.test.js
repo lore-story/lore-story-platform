@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { isStoryAvailableInWorld, stories, storyCategoryLabel, worldSwitchPlan } from '../src/data.js'
+import { isStoryAvailableInWorld, resolvePresentationWorldId, stories, storyCategoryLabel, storyMissionSlug, storyPresentationLabel, worldSwitchPlan } from '../src/data.js'
 import { crewLabel, joinBlockedReason, readinessLabel } from '../src/mission.js'
 
 test('world-bound and independent story categories enforce availability', () => {
@@ -28,6 +28,21 @@ test('world switch plans preserve free stories and replace incompatible bound st
     assert.equal(storyCategoryLabel(plan.story), 'Freie Mission')
     assert.equal(plan.presentationWorldId, worldId)
   }
+})
+test('presentation world is independent from category and never uses the legacy motif', () => {
+  const astra = stories.find(story => story.id === 'notruf-aus-dem-all')
+  const moss = stories.find(story => story.id === 'moosarchiv')
+  assert.equal(resolvePresentationWorldId(moss, 'astra', 'nebelmark'), 'astra')
+  assert.equal(storyCategoryLabel(moss), 'Freie Mission')
+  assert.equal(storyPresentationLabel(moss, 'astra'), 'Aktuell in Astra inszeniert')
+  assert.notEqual(storyCategoryLabel(moss), 'Astra-Mission')
+  assert.equal(storyMissionSlug(moss, 'astra'), 'lore-astra-moosarchiv')
+  assert.equal(resolvePresentationWorldId(moss, 'nebelmark', 'astra'), 'nebelmark')
+  assert.equal(storyCategoryLabel(moss), 'Freie Mission')
+  assert.equal(resolvePresentationWorldId(astra, 'nebelmark', 'nebelmark'), 'astra')
+  assert.equal(storyMissionSlug(astra, 'nebelmark'), 'lore-astra-notruf-aus-dem-all')
+  assert.equal(storyCategoryLabel(astra), 'Astra-Mission')
+  assert.ok(stories.every(story => !Object.hasOwn(story, 'world')))
 })
 test('join blocks expose concrete domain reasons and allow a free callsign', () => {
   const base={status:'lobby',joining_open:true,taken_callsigns:['Nova']}

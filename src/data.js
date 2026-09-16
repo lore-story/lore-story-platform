@@ -6,18 +6,34 @@ export const worlds = [
 ]
 
 export const stories = [
-  { id: 'notruf-aus-dem-all', title: 'Notruf aus dem All', storyType: 'world_bound', worldId: 'astra', world: 'astra', subject: 'Klassenleitung', age: '9–13', duration: '45 Min.', chapters: 8, description: 'NOVA empfängt ein unbekanntes Signal. Registriert eure Crew und bereitet die Astra auf den Start vor.', skills: ['Gemeinschaft', 'Organisation'], accent: '#ff9d3b' },
-  { id: 'moosarchiv', title: 'Das Flüstern des Moosarchivs', storyType: 'world_independent', worldId: null, world: 'nebelmark', variants: { astra: 'Bioarchiv der Astra', nebelmark: 'Moosarchiv', aether: 'Wolkenarchiv', tiefsee: 'Korallenarchiv' }, subject: 'Biologie', age: '10–13', duration: '35 Min.', chapters: 5, description: 'Entschlüssle ein geheimes Ökosystem. Das Lernangebot kann in jeder Welt inszeniert werden.', skills: ['Ökosysteme', 'Transferwissen'], accent: '#7fc69f' },
-  { id: 'sternenuhr', storyType: 'world_independent', worldId: null, title: 'Die Kartografin der Sternenuhr', world: 'aether', subject: 'Mathematik', age: '12–15', duration: '45 Min.', chapters: 6, description: 'Berechne die Flugbahnen der Inseln, bevor die große Konjunktion beginnt.', skills: ['Geometrie', 'Problemlösen'], accent: '#ad96e5' },
-  { id: 'korallenrat', storyType: 'world_independent', worldId: null, title: 'Der Rat der stillen Korallen', world: 'tiefsee', subject: 'Deutsch', age: '9–12', duration: '30 Min.', chapters: 4, description: 'Finde die richtigen Worte, um die zerstrittenen Riffe wieder zu vereinen.', skills: ['Argumentation', 'Lesen'], accent: '#69b9d8' },
-  { id: 'glutpfad', storyType: 'world_independent', worldId: null, title: 'Der Pfad der sieben Funken', world: 'nebelmark', subject: 'Sachkunde', age: '8–11', duration: '25 Min.', chapters: 4, description: 'Folge den Spuren der Elemente durch eine Landschaft im Wandel.', skills: ['Naturphänomene', 'Logik'], accent: '#e8a869' },
+  { id: 'notruf-aus-dem-all', title: 'Notruf aus dem All', storyType: 'world_bound', worldId: 'astra', defaultDesignWorldId: 'astra', subject: 'Klassenleitung', age: '9–13', duration: '45 Min.', chapters: 8, description: 'NOVA empfängt ein unbekanntes Signal. Registriert eure Crew und bereitet die Astra auf den Start vor.', skills: ['Gemeinschaft', 'Organisation'], accent: '#ff9d3b' },
+  { id: 'moosarchiv', title: 'Das Flüstern des Moosarchivs', storyType: 'world_independent', worldId: null, defaultDesignWorldId: 'nebelmark', variants: { astra: 'Bioarchiv der Astra', nebelmark: 'Moosarchiv', aether: 'Wolkenarchiv', tiefsee: 'Korallenarchiv' }, subject: 'Biologie', age: '10–13', duration: '35 Min.', chapters: 5, description: 'Entschlüssle ein geheimes Ökosystem. Das Lernangebot kann in jeder Welt inszeniert werden.', skills: ['Ökosysteme', 'Transferwissen'], accent: '#7fc69f' },
+  { id: 'sternenuhr', storyType: 'world_independent', worldId: null, defaultDesignWorldId: 'aether', title: 'Die Kartografin der Sternenuhr', subject: 'Mathematik', age: '12–15', duration: '45 Min.', chapters: 6, description: 'Berechne die Flugbahnen der Inseln, bevor die große Konjunktion beginnt.', skills: ['Geometrie', 'Problemlösen'], accent: '#ad96e5' },
+  { id: 'korallenrat', storyType: 'world_independent', worldId: null, defaultDesignWorldId: 'tiefsee', title: 'Der Rat der stillen Korallen', subject: 'Deutsch', age: '9–12', duration: '30 Min.', chapters: 4, description: 'Finde die richtigen Worte, um die zerstrittenen Riffe wieder zu vereinen.', skills: ['Argumentation', 'Lesen'], accent: '#69b9d8' },
+  { id: 'glutpfad', storyType: 'world_independent', worldId: null, defaultDesignWorldId: 'nebelmark', title: 'Der Pfad der sieben Funken', subject: 'Sachkunde', age: '8–11', duration: '25 Min.', chapters: 4, description: 'Folge den Spuren der Elemente durch eine Landschaft im Wandel.', skills: ['Naturphänomene', 'Logik'], accent: '#e8a869' },
 ]
 
 export const storyCategoryLabel = story => story.storyType === 'world_independent'
   ? 'Freie Mission'
   : `${worlds.find(world => world.id === story.worldId)?.name || 'Welt'}-Mission`
 
-export const isStoryAvailableInWorld = (story, worldId) => story?.storyType === 'world_independent' || (story?.worldId || story?.world) === worldId
+export const isStoryAvailableInWorld = (story, worldId) => story?.storyType === 'world_independent' || story?.worldId === worldId
+
+export const resolvePresentationWorldId = (story, presentationWorldId, activeWorld) => story?.storyType === 'world_bound'
+  ? story.worldId
+  : presentationWorldId || activeWorld
+
+export const storyPresentationLabel = (story, presentationWorldId, activeWorld) => {
+  if (story?.storyType !== 'world_independent') return storyCategoryLabel(story)
+  const worldId = resolvePresentationWorldId(story, presentationWorldId, activeWorld)
+  const name = worlds.find(world => world.id === worldId)?.name || 'gewählter Welt'
+  return `Aktuell in ${name} inszeniert`
+}
+
+export const storyMissionSlug = (story, presentationWorldId, activeWorld) => {
+  const worldId = resolvePresentationWorldId(story, presentationWorldId, activeWorld)
+  return story && worldId ? `lore-${worldId}-${story.id}` : null
+}
 
 export const DEFAULT_FREE_STORY_ID = 'moosarchiv'
 export function worldSwitchPlan(story, targetWorldId) {

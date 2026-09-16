@@ -76,6 +76,6 @@ function MissionRuntime({ supabase, onBack, theme, mission }) {
 }
 
 export default function MissionLobby(props) {
-  if (!props.theme || !props.mission) return <main className="mission-unavailable"><button onClick={props.onBack}><ArrowLeft/> Zum Loreboard</button><section><h1>Keine Mission ausgewählt</h1><p>Wähle eine Story, die zur aktiven Welt gehört.</p></section></main>
+  if (!props.theme || !props.mission) return <main className="mission-unavailable"><button onClick={props.onBack}><ArrowLeft/> Zum Loreboard</button><section><h1>Keine Mission verfügbar</h1><p>{props.story?.storyType==='world_independent'?'Mission in dieser Welt noch nicht umgesetzt':'Wähle eine Story, die zur aktiven Welt gehört.'}</p></section></main>
   return <MissionRuntime {...props}/>
 }
