@@ -2,7 +2,7 @@ import { ASTRA_SCENES, MEMORY_PROMPTS } from './astraMission.js'
 
 export const WORLD_THEMES = Object.freeze({
   astra: Object.freeze({
-    id: 'astra', name: 'Astra', typography: { display: '"Arial Narrow", Inter, sans-serif', body: 'Inter, sans-serif' },
+    id: 'astra', name: 'Astra', typography: { display: 'Inter, sans-serif', body: 'Inter, sans-serif' },
     colors: { void: '#020914', panel: '#071827e8', panelSolid: '#091b2b', cyan: '#35d8f3', orange: '#ff9d3b', text: '#f2f8fc', muted: '#8ca9b9', danger: '#ff6b62' },
     surfaces: { border: '1px solid #35d8f355', radius: '4px', shadow: '0 18px 70px #000b' },
     symbols: { logo: 'ASTRA', assistant: 'NOVA', world: '◈' },
