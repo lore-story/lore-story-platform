@@ -78,7 +78,7 @@ try {
   await marketStory.getByRole('button', { name: 'Zum Fundus' }).click()
   await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Fundus', exact: true }).click()
   const fundusStory = desktop.locator('.story-card').filter({ hasText: 'Die Kartografin der Sternenuhr' })
-  assert.equal(await fundusStory.getByRole('button', { name: 'Nur in der zugehörigen Welt' }).isDisabled(), true)
+  assert.equal(await fundusStory.getByRole('button', { name: 'Im Loreboard aktivieren' }).isEnabled(), true)
   await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Übersicht', exact: true }).click()
   assert.match(await desktop.locator('.active-banner h2').innerText(), /Moosarchiv/)
 

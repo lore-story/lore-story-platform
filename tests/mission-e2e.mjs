@@ -91,6 +91,10 @@ try {
   await teacher.reload()
   await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click()
   await teacher.getByText('ASTR001', { exact: true }).waitFor()
+  await teacher.screenshot({ path: 'artifacts/astra-mission-lobby.png' })
+  await teacher.getByRole('button', { name: 'QR-Code groß anzeigen' }).click()
+  await teacher.getByRole('dialog', { name: 'QR-Code groß anzeigen' }).screenshot({ path: 'artifacts/astra-qr-large.png' })
+  await teacher.getByRole('button', { name: 'QR-Code schließen' }).click()
 
   const joinUrl = `${baseUrl}/join/ASTR001`
   const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl)
@@ -173,6 +177,7 @@ try {
     await teacher.setViewportSize(viewport); await teacher.screenshot({ path: `artifacts/astra-runtime-${viewport.width}x${viewport.height}.png` }); assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
   }
   await teacher.locator('.crew-manager summary').click()
+  await teacher.screenshot({ path: 'artifacts/astra-mission-nova.png' })
   await teacher.locator('.scene-actions').getByRole('button', { name: /Countdown starten/ }).click()
   await teacher.getByText('10', { exact: true }).waitFor(); await teacher.getByText('0', { exact: true }).waitFor({ timeout: 13000 })
   await teacher.locator('.media-fallback').waitFor({ timeout: 5000 })

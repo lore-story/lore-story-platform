@@ -1,17 +1,33 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { isStoryAvailableInWorld, stories, storyCategoryLabel } from '../src/data.js'
+import { isStoryAvailableInWorld, stories, storyCategoryLabel, worldSwitchPlan } from '../src/data.js'
 import { crewLabel, joinBlockedReason, readinessLabel } from '../src/mission.js'
 
 test('world-bound and independent story categories enforce availability', () => {
   const astra = stories.find(story => story.id === 'notruf-aus-dem-all')
-  const neutral = stories.find(story => story.storyType === 'world_independent')
+  const neutral = stories.find(story => story.id === 'moosarchiv')
   assert.equal(isStoryAvailableInWorld(astra, 'astra'), true)
   assert.equal(isStoryAvailableInWorld(astra, 'nebelmark'), false)
   for (const world of ['astra','nebelmark','aether','tiefsee']) assert.equal(isStoryAvailableInWorld(neutral, world), true)
-  assert.match(storyCategoryLabel(astra), /Nur in Astra/)
-  assert.match(storyCategoryLabel(neutral), /In allen Welten spielbar/)
+  assert.equal(storyCategoryLabel(astra), 'Astra-Mission')
+  assert.equal(storyCategoryLabel(neutral), 'Freie Mission')
+  assert.ok(stories.filter(story => story.id !== astra.id).every(story => story.storyType === 'world_independent' && story.worldId === null))
+})
+test('world switch plans preserve free stories and replace incompatible bound stories only on apply', () => {
+  const astra = stories.find(story => story.id === 'notruf-aus-dem-all')
+  const moss = stories.find(story => story.id === 'moosarchiv')
+  const fallback = worldSwitchPlan(astra, 'nebelmark')
+  assert.equal(fallback.requiresFallback, true)
+  assert.equal(fallback.story, moss)
+  assert.equal(fallback.presentationWorldId, 'nebelmark')
+  for (const worldId of ['astra','nebelmark','aether','tiefsee']) {
+    const plan = worldSwitchPlan(moss, worldId)
+    assert.equal(plan.story, moss)
+    assert.equal(plan.requiresFallback, false)
+    assert.equal(storyCategoryLabel(plan.story), 'Freie Mission')
+    assert.equal(plan.presentationWorldId, worldId)
+  }
 })
 test('join blocks expose concrete domain reasons and allow a free callsign', () => {
   const base={status:'lobby',joining_open:true,taken_callsigns:['Nova']}
