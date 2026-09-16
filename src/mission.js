@@ -56,6 +56,8 @@ export function createMissionRepository(client) {
     },
     create: loreboardId => rpcOne('create_mission_session', { p_loreboard_id: loreboardId || null }),
     update: (id, action) => rpcOne('update_mission_session', { p_session_id: id, p_action: action }),
+    setScene: (id, scene) => rpcOne('set_mission_scene', { p_session_id: id, p_scene_id: scene }),
+    resetReady: async (id, scene) => { const { error } = await client.rpc('reset_mission_readiness', { p_session_id: id, p_scene_id: scene }); if (error) throw error },
     async participants(id) {
       const { data, error } = await client.from('mission_participants').select(PARTICIPANT_COLUMNS).eq('session_id', id).order('callsign')
       if (error) throw error

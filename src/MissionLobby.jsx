@@ -1,87 +1,63 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import { ArrowLeft, Check, Play, Radio, RefreshCw, Trash2, Wifi, WifiOff, X } from 'lucide-react'
-import { createMissionRepository, isParticipantConnected, readyCount, STORY_TITLE } from './mission'
+import { ArrowLeft, ArrowRight, Expand, Pause, Play, RefreshCw, RotateCcw, Trash2, Wifi, WifiOff, X } from 'lucide-react'
+import { initialSceneTimer, sceneTimerRemaining, updateSceneTimer } from './sceneTimer'
+import { createMissionRepository, isParticipantConnected, readyCount } from './mission'
+import { themeVariables } from './worldThemes'
 
 const OPEN_SESSION_KEY = 'lore-open-mission-id'
+function MemoryWheel({ onClose, prompts }) {
+  const [turn, setTurn] = useState(0)
+  const spin = () => setTurn(value => value + 1 + Math.floor(Math.random() * prompts.length))
+  const prompt = prompts[turn % prompts.length]
+  return <div className="astra-overlay" role="presentation" onMouseDown={event => event.target === event.currentTarget && onClose()}><section role="dialog" aria-modal="true" aria-label="NOVA-Erinnerungsrad"><button className="overlay-close" aria-label="Erinnerungsrad schließen" onClick={onClose}><X/></button><small>PARTNERARBEIT · NOVA-ERINNERUNGSRAD</small><h2>Übertragt eure Erinnerungen</h2><p>Bildet Zweierteams. Eine Person dreht das Rad und beantwortet den Impuls. Danach wechselt ihr – nach jeder Antwort.</p><button className="memory-wheel" style={{ transform: `rotate(${turn * 90}deg)` }} onClick={spin} aria-label="Erinnerungsrad drehen"><span>CREW<br/>SIGNAL</span></button><article><small>{prompt[0]}</small><strong>{prompt[1]}</strong></article><p className="switch-hint">↔ Nach jeder Antwort wechseln</p></section></div>
+}
 
-export default function MissionLobby({ supabase, onBack }) {
+function SceneMedia({ scene, launch, finished, theme, onLaunchEnded }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [scene.id, launch])
+  if (finished) return <div className="astra-media astra-finale"><span>{theme.symbols.logo} · ÜBERTRAGUNG</span><h2>Fortsetzung folgt</h2><i/></div>
+  const source = launch ? theme.media.launch : theme.media.scenePattern.replace('{scene}', scene.id)
+  return <div className={`astra-media scene-${scene.id} ${failed ? 'media-fallback' : ''}`}><video key={source} autoPlay muted playsInline loop={!launch} poster={theme.media.poster} onError={() => setFailed(true)} onEnded={() => { if (launch) onLaunchEnded() }}><source src={source}/></video><div className="starfield"/><span className="media-status">{failed ? 'VISUELLE ERSATZANZEIGE · MEDIUM NICHT VERFÜGBAR' : 'LIVE-SZENENÜBERTRAGUNG'}</span></div>
+}
+
+function Lobby({ session, participants, qr, online, action, remove, onBack, theme, mission }) {
+  const active = participants.filter(person => person.status !== 'removed')
+  return <main className="astra-shell astra-lobby" style={themeVariables(theme)}><header><button onClick={onBack}><ArrowLeft/> Loreboard</button><div className="astra-wordmark">LORE STORY <b>// {theme.name.toUpperCase()}</b></div><div className={`connection ${online ? 'online' : ''}`}>{online ? <Wifi/> : <WifiOff/>}{online ? 'Crew-Netzwerk online' : 'Offline'}</div></header><section className="lobby-heading"><small>{mission.labels.lobby}</small><h1>{session.title}</h1><p>{mission.labels.assistant} wartet auf eure Crew.</p></section><div className="astra-lobby-grid"><article className="astra-panel join-signal">{qr && <img src={qr} alt={`QR-Code für Sitzung ${session.join_code}`}/>}<span>SITZUNGSCODE</span><strong>{session.join_code}</strong><button onClick={() => action(session.joining_open ? 'close_joining' : 'open_joining')}>{session.joining_open ? <><X/> Zugang schließen</> : <><RefreshCw/> Zugang öffnen</>}</button></article><article className="astra-panel crew-network"><div><span>{theme.terms.network.toUpperCase()}</span><strong>{active.length} Crewmitglieder</strong></div><div className="crew-grid">{active.map(person => <div key={person.id} className={isParticipantConnected(person) ? 'connected' : 'disconnected'}><i/><b>{person.callsign}</b><small>{isParticipantConnected(person) ? 'verbunden' : 'Signal verloren'}</small><button aria-label={`${person.callsign} entfernen`} onClick={() => window.confirm(`${person.callsign} entfernen?`) && remove(person.id)}><Trash2/></button></div>)}</div>{!active.length && <p>Warte auf eingehende Crew-Signale …</p>}</article></div><button className="astra-primary launch-lobby" onClick={() => window.confirm('Mission jetzt beginnen?') && action('start')}><Play/> Mission starten</button></main>
+}
+
+function MissionRuntime({ supabase, onBack, theme, mission }) {
   const repo = useMemo(() => createMissionRepository(supabase), [supabase])
-  const selectedId = useRef(window.sessionStorage.getItem(OPEN_SESSION_KEY))
-  const [sessions, setSessions] = useState([])
-  const [session, setSession] = useState(null)
-  const [participants, setParticipants] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [online, setOnline] = useState(true)
-  const [qr, setQr] = useState('')
-  const [, tick] = useState(0)
-
-  const loadSession = useCallback(async id => {
-    const rows = await repo.list()
-    setSessions(rows)
-    const pinned = rows.find(item => item.id === (id || selectedId.current))
-    const current = pinned || rows.find(item => item.status !== 'completed') || rows[0] || null
-    selectedId.current = current?.id || null
-    if (current) window.sessionStorage.setItem(OPEN_SESSION_KEY, current.id)
-    setSession(current)
-    setParticipants(current ? await repo.participants(current.id) : [])
-  }, [repo])
-
-  const refresh = useCallback(async () => {
-    try {
-      await loadSession(selectedId.current)
-      setError('')
-    } catch {
-      setError('Die Missionsdaten konnten nicht geladen werden.')
-    } finally {
-      setLoading(false)
-    }
-  }, [loadSession])
-
+  const selectedId = useRef(window.localStorage.getItem(OPEN_SESSION_KEY)); const actionLock = useRef(false)
+  const [, setSessions] = useState([]); const [session, setSession] = useState(null); const [participants, setParticipants] = useState([])
+  const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [online, setOnline] = useState(true); const [qr, setQr] = useState('')
+  const [wheel, setWheel] = useState(false); const [now, setNow] = useState(Date.now()); const [countdown, setCountdown] = useState(null); const [launch, setLaunch] = useState(false); const [finished, setFinished] = useState(false); const [sceneTimer, setSceneTimer] = useState(() => initialSceneTimer('ankunft'))
+  const load = useCallback(async id => { const rows = await repo.list(); setSessions(rows); const found = rows.find(x => x.id === (id || selectedId.current)) || rows.find(x => x.status !== 'completed') || rows[0] || null; if (found) { selectedId.current = found.id; window.localStorage.setItem(OPEN_SESSION_KEY, found.id) } setSession(found); setParticipants(found ? await repo.participants(found.id) : []) }, [repo])
+  const refresh = useCallback(async () => { try { await load(); setError('') } catch { setError('Missionsdaten konnten nicht geladen werden.') } finally { setLoading(false) } }, [load])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { if (!session?.id || session.current_scene_id !== 'startfreigabe') return; const finale = window.localStorage.getItem(`mission-finale:${session.id}`); setLaunch(finale === 'launch'); setFinished(finale === 'finished') }, [session?.current_scene_id, session?.id])
   useEffect(() => session ? repo.subscribe(session.id, refresh, status => setOnline(status === 'SUBSCRIBED')) : undefined, [refresh, repo, session?.id])
-  useEffect(() => {
-    if (!session) return undefined
-    QRCode.toDataURL(`${window.location.origin}/join/${session.join_code}`, { width: 320, margin: 1, color: { dark: '#10243d', light: '#ffffff' } }).then(setQr)
-    return undefined
-  }, [session])
-  useEffect(() => {
-    const timer = window.setInterval(() => tick(value => value + 1), 10_000)
-    return () => window.clearInterval(timer)
-  }, [])
+  useEffect(() => { if (!session) return; QRCode.toDataURL(`${window.location.origin}/join/${session.join_code}`, { width: 240, margin: 1, color: { dark: '#03111f', light: '#ffffff' } }).then(setQr) }, [session?.id, session?.join_code])
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
+  useEffect(() => { setSceneTimer(current => { if (current.sceneId === session?.current_scene_id) return current; const key = `mission-scene-timer:${session?.id}:${session?.current_scene_id}`; try { const saved = JSON.parse(window.localStorage.getItem(key)); return saved?.sceneId === session?.current_scene_id ? updateSceneTimer(saved, 'tick') : initialSceneTimer(session?.current_scene_id) } catch { return initialSceneTimer(session?.current_scene_id) } }) }, [session?.current_scene_id, session?.id])
+  useEffect(() => { if (!session?.id || !sceneTimer.sceneId) return; window.localStorage.setItem(`mission-scene-timer:${session.id}:${sceneTimer.sceneId}`, JSON.stringify(sceneTimer)) }, [sceneTimer, session?.id])
+  useEffect(() => { if (sceneTimer.status !== 'running') return; setSceneTimer(current => updateSceneTimer(current, 'tick')); const timer = window.setInterval(() => setSceneTimer(current => updateSceneTimer(current, 'tick')), 250); return () => window.clearInterval(timer) }, [sceneTimer.status])
+  useEffect(() => { if (countdown === null) return; if (countdown === 0) { const timer = window.setTimeout(() => { setLaunch(true); setFinished(false); if (session?.id) window.localStorage.setItem(`mission-finale:${session.id}`, 'launch') }, 700); return () => window.clearTimeout(timer) } const timer = window.setTimeout(() => setCountdown(value => value - 1), 1000); return () => window.clearTimeout(timer) }, [countdown])
+  const create = async () => { try { setLoading(true); const made = await repo.create(null); selectedId.current = made.id; await load(made.id) } catch (caught) { setError(caught?.message === 'OPEN_SESSION_EXISTS' ? 'Eine offene Sitzung ist bereits vorhanden.' : 'Mission konnte nicht vorbereitet werden.') } finally { setLoading(false) } }
+  const action = async name => { if (actionLock.current || !session) return; actionLock.current = true; try { setSession(await repo.update(session.id, name)); setError('') } catch { setError('Änderung konnte nicht gespeichert werden.') } finally { actionLock.current = false } }
+  const goScene = async id => { if (actionLock.current) return; actionLock.current = true; try { setSession(await repo.setScene(session.id, id)); setSceneTimer(initialSceneTimer(id)); setCountdown(null); setLaunch(false); setFinished(false); window.localStorage.removeItem(`mission-finale:${session.id}`) } catch { setError('Szenenwechsel konnte nicht gespeichert werden.') } finally { actionLock.current = false } }
+  if (loading) return <main className="astra-shell astra-loading" style={themeVariables(theme)}>NOVA initialisiert Missionsdaten …</main>
+  if (!session) return <main className="astra-shell astra-empty" style={themeVariables(theme)}><button onClick={onBack}><ArrowLeft/> Zurück zum Loreboard</button><div><small>ASTRA · MISSIONSKONTROLLE</small><h1>{mission.title}</h1><p>Bereite die erste Mission der Welt Astra vor.</p><button className="astra-primary" onClick={create}>Mission vorbereiten</button>{error && <p role="alert">{error}</p>}</div></main>
+  if (session.status === 'lobby') return <Lobby {...{ session, participants, qr, online, action, onBack, theme, mission }} remove={repo.remove}/>
+  if (session.status === 'completed') return <main className="astra-shell astra-empty" style={themeVariables(theme)}><button onClick={onBack}><ArrowLeft/> Loreboard</button><div><small>MISSIONSARCHIV</small><h1>Mission abgeschlossen</h1><p>Die Sitzung ist unveränderlich archiviert.</p><button onClick={create}>Neue Mission vorbereiten</button></div></main>
+  const scene = mission.scenes.find(item => item.id === session.current_scene_id) || mission.scenes[0]; const index = Math.max(0, mission.scenes.findIndex(item => item.id === scene.id)); const active = participants.filter(x => x.status !== 'removed'); const ready = readyCount(active, scene.id)
+  const advance = () => index < mission.scenes.length - 1 && goScene(mission.scenes[index + 1].id)
+  const sceneAction = () => { if (scene.id === 'startfreigabe') { setCountdown(10); window.localStorage.removeItem(`mission-finale:${session.id}`) } else advance() }
+  const showFinale = () => { setFinished(true); setLaunch(false); window.localStorage.setItem(`mission-finale:${session.id}`, 'finished') }
+  return <main className="astra-shell astra-story" style={themeVariables(theme)}><header><button onClick={onBack}><ArrowLeft/> Zurück zum Loreboard</button><div className="astra-wordmark">LORE STORY <b>// {session.title}</b></div><span>{active.length} CREW</span><button>{mission.labels.feedback}</button></header><div className="story-grid-layout"><section className="scene-stage"><SceneMedia {...{ scene, launch, finished, theme }} onLaunchEnded={showFinale}/>{countdown !== null && !launch && <div className="countdown" aria-live="assertive">{countdown}</div>}<div className="scene-copy"><div><small>{scene.label}</small><time>{new Date(now).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></div><h1>{finished ? 'Fortsetzung folgt' : scene.title}</h1>{!finished && <div className="nova-dialog"><span>{mission.labels.assistant}</span><p>{scene.message}</p></div>}</div><nav className="scene-actions"><button disabled={index === 0 || launch} onClick={() => goScene(mission.scenes[index - 1].id)}><ArrowLeft/> Zurück</button>{scene.secondary && <button className="cyan" onClick={() => setWheel(true)}>{scene.secondary}</button>}{launch && !finished ? <button className="astra-primary" onClick={showFinale}>Startübertragung abschließen</button> : finished ? <button className="astra-primary" onClick={() => window.confirm('Sitzung endgültig abschließen?') && action('complete')}>Mission endgültig abschließen</button> : <button className="astra-primary" onClick={sceneAction}>{scene.action} <ArrowRight/></button>}</nav></section><aside className="mission-console"><section className="scene-timer"><small>SZENENTIMER</small><strong>{String(Math.floor(sceneTimerRemaining(sceneTimer, now) / 60)).padStart(2, '0')}:{String(sceneTimerRemaining(sceneTimer, now) % 60).padStart(2, '0')}</strong><div><button aria-label="Eine Minute abziehen" onClick={() => setSceneTimer(value => updateSceneTimer(value, 'minus'))}>−1</button><button aria-label="Eine Minute hinzufügen" onClick={() => setSceneTimer(value => updateSceneTimer(value, 'plus'))}>+1</button><button onClick={() => setSceneTimer(value => updateSceneTimer(value, value.status === 'running' ? 'pause' : value.status === 'paused' ? 'resume' : 'start'))}>{sceneTimer.status === 'running' ? 'Pause' : sceneTimer.status === 'paused' ? 'Fortsetzen' : 'Start'}</button><button aria-label="Szenentimer zurücksetzen" onClick={() => setSceneTimer(value => updateSceneTimer(value, 'reset'))}><RotateCcw/></button></div></section><section className="code-mini">{qr && <img src={qr} alt="Sitzungs-QR-Code"/>}<div><small>SITZUNGSCODE</small><b>{session.join_code}</b></div></section><button onClick={() => action(session.status === 'paused' ? 'resume' : 'pause')}>{session.status === 'paused' ? <><Play/> Geräte fortsetzen</> : <><Pause/> Alle Geräte pausieren</>}</button><button onClick={() => document.documentElement.requestFullscreen?.()}><Expand/> Vollbild</button><section><small>MISSIONSFORTSCHRITT</small><div className="mission-progress"><i style={{ width: `${((index + 1) / mission.scenes.length) * 100}%` }}/></div><b>{index + 1} / {mission.scenes.length} Szenen</b></section><section><small>CREW-BEREITSCHAFT</small><strong>{ready} / {active.length}</strong>{scene.ready && <button onClick={() => repo.resetReady(session.id, scene.id)}><RotateCcw/> Bereitschaft zurücksetzen</button>}</section>{['Crew-Check', 'Navigation', 'Ausrüstung'].map(label => <section className="system-row" key={label}><i className={mission.scenes.slice(0, index + 1).some(x => x.status === label) ? 'done' : ''}/><span>{label}</span><b>{mission.scenes.slice(0, index + 1).some(x => x.status === label) ? 'OK' : 'OFFEN'}</b></section>)}</aside></div>{session.status === 'paused' && <div className="teacher-paused"><Pause/> Schülergeräte pausiert</div>}{wheel && <MemoryWheel prompts={mission.memoryPrompts} onClose={() => setWheel(false)}/>} {error && <p className="mission-error" role="alert">{error}</p>}</main>
+}
 
-  const create = async () => {
-    setLoading(true)
-    try {
-      const created = await repo.create(null)
-      selectedId.current = created.id
-      window.sessionStorage.setItem(OPEN_SESSION_KEY, created.id)
-      await loadSession(created.id)
-      setError('')
-    } catch (caught) {
-      setError(caught?.message === 'OPEN_SESSION_EXISTS' ? 'Es gibt bereits eine offene Sitzung. Öffne oder beende sie zuerst.' : 'Die Mission konnte nicht vorbereitet werden.')
-    } finally {
-      setLoading(false)
-    }
-  }
-  const action = async name => {
-    try { setSession(await repo.update(session.id, name)); setError('') } catch { setError('Die Änderung konnte nicht gespeichert werden.') }
-  }
-  const selectArchived = async id => {
-    selectedId.current = id
-    window.sessionStorage.setItem(OPEN_SESSION_KEY, id)
-    setLoading(true)
-    try { await loadSession(id) } finally { setLoading(false) }
-  }
-  const begin = () => window.confirm('Mission jetzt manuell beginnen?') && action('start')
-  const finish = () => window.confirm('Mission wirklich abschließen? Danach kann sie nicht mehr verändert werden.') && action('complete')
-
-  if (loading) return <main className="mission-lobby"><p>Mission wird geladen …</p></main>
-  if (!session) return <main className="mission-lobby"><button className="back" onClick={onBack}><ArrowLeft/> Zum Loreboard</button><section className="empty-mission"><small>LORE ASTRA</small><h1>{STORY_TITLE}</h1><p>Bereite eine sichere Sitzung mit anonymen Rufzeichen vor.</p>{error && <p role="alert">{error}</p>}<button className="primary" onClick={create}>Mission vorbereiten</button></section></main>
-
-  const activeParticipants = participants.filter(participant => participant.status !== 'removed')
-  const ready = readyCount(activeParticipants, session.current_scene_id)
-  const missing = activeParticipants.filter(participant => participant.ready_scene_id !== session.current_scene_id)
-  return <main className="mission-lobby"><header><button className="back" onClick={onBack}><ArrowLeft/> Zum Loreboard</button><label className="mission-archive">Sitzung<select aria-label="Missionsarchiv" value={session.id} onChange={event => selectArchived(event.target.value)}>{sessions.map(item => <option value={item.id} key={item.id}>{item.status === 'completed' ? 'Archiv' : 'Offen'} · {new Date(item.created_at).toLocaleDateString('de-DE')}</option>)}</select></label><div className={`connection ${online ? 'online' : ''}`}>{online ? <Wifi/> : <WifiOff/>}{online ? 'Realtime verbunden' : 'Verbindung unterbrochen'}</div></header><section className="mission-title"><small>LORE ASTRA · {session.status === 'lobby' ? 'MISSIONSLOBBY' : session.status === 'completed' ? 'ARCHIV' : 'AKTIVE MISSION'}</small><h1>{session.title}</h1></section><div className="mission-layout"><article className="join-panel">{qr && <img src={qr} alt={`QR-Code für Sitzung ${session.join_code}`}/>}<span>SITZUNGSCODE</span><strong>{session.join_code}</strong><p>{window.location.origin}/join/{session.join_code}</p><button onClick={() => action(session.joining_open ? 'close_joining' : 'open_joining')} disabled={session.status === 'completed'}>{session.joining_open ? <><X/> Zugang schließen</> : <><RefreshCw/> Zugang öffnen</>}</button></article><article className="crew-panel"><div><span>CREW</span><strong>{activeParticipants.length} Teilnehmende</strong></div><div className="crew-grid">{activeParticipants.map(participant => { const connected = isParticipantConnected(participant); return <div key={participant.id} className={connected ? 'connected' : 'disconnected'}><i/><b>{participant.callsign}</b><small>{connected ? 'verbunden' : 'getrennt'}</small><button aria-label={`${participant.callsign} entfernen`} onClick={() => window.confirm(`${participant.callsign} entfernen?`) && repo.remove(participant.id)}><Trash2/></button></div> })}</div>{!activeParticipants.length && <p>Noch ist niemand beigetreten.</p>}<div className="ready"><Radio/><strong>{ready} von {activeParticipants.length} bereit</strong><details><summary>Fehlende Rufzeichen</summary>{missing.map(participant => <span key={participant.id}>{participant.callsign}</span>)}</details></div></article></div>{session.status === 'lobby' && <button className="mission-action" onClick={begin}><Play/> Mission beginnen</button>}{session.status === 'active' && <section className="active-placeholder"><Check/><p>Die Missionssitzung ist aktiv. Die Storyoberfläche wird im nächsten Entwicklungsschritt angebunden.</p><button onClick={finish}>Mission abschließen</button></section>}{session.status === 'completed' && <div className="archive-actions"><p>Diese Sitzung ist abgeschlossen und bleibt als Ergebnis erhalten.</p><button onClick={create}>Mission erneut starten</button></div>}{error && <p className="mission-error" role="alert">{error}</p>}</main>
+export default function MissionLobby(props) {
+  if (!props.theme || !props.mission) return <main className="mission-unavailable"><button onClick={props.onBack}><ArrowLeft/> Zum Loreboard</button><section><h1>Keine Mission ausgewählt</h1><p>Wähle eine Story, die zur aktiven Welt gehört.</p></section></main>
+  return <MissionRuntime {...props}/>
 }

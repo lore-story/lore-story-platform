@@ -10,7 +10,7 @@ function rpc(role, userId, name, args) {
   if (name === 'create_mission_session') {
     if (role !== 'teacher') return fail('TEACHER_REQUIRED')
     if (backend.runs.some(run => run.status !== 'completed')) return fail('OPEN_SESSION_EXISTS')
-    const now = new Date().toISOString(); const run = { id: `run-${backend.nextRun}`, story_slug: 'lore-astra-notruf-aus-dem-all', title: 'Notruf aus dem All', join_code: codeFor(backend.nextRun++), status: 'lobby', joining_open: true, current_scene_id: 'testszene', created_at: now, started_at: null, completed_at: null, updated_at: now }
+    const now = new Date().toISOString(); const run = { id: `run-${backend.nextRun}`, story_slug: 'lore-astra-notruf-aus-dem-all', title: 'Notruf aus dem All', join_code: codeFor(backend.nextRun++), status: 'lobby', joining_open: true, current_scene_id: 'ankunft', created_at: now, started_at: null, completed_at: null, updated_at: now }
     backend.runs.unshift(run); backend.version++; return { data: [run], error: null }
   }
   const run = backend.runs.find(item => item.id === args.p_session_id || item.join_code === args.p_code)
@@ -31,12 +31,22 @@ function rpc(role, userId, name, args) {
     participant.status = 'connected'; participant.last_seen_at = new Date().toISOString(); if (!own) backend.participants.push(participant); backend.version++
     return { data: [{ ...run, session_id: run.id, participant_id: participant.id, callsign: participant.callsign, ready_scene_id: participant.ready_scene_id }], error: null }
   }
+  if (name === 'set_mission_scene') {
+    if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
+    run.current_scene_id = args.p_scene_id; run.updated_at = new Date().toISOString(); backend.version++; return { data: [run], error: null }
+  }
+  if (name === 'reset_mission_readiness') {
+    if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
+    backend.participants.filter(item => item.session_id === run.id && item.ready_scene_id === args.p_scene_id).forEach(item => { item.ready_scene_id = null }); backend.version++; return { data: null, error: null }
+  }
   if (name === 'update_mission_session') {
     if (!run || role !== 'teacher') return fail('MISSION_FORBIDDEN')
     if (run.status === 'completed') return fail('MISSION_COMPLETED')
     if (args.p_action === 'close_joining') run.joining_open = false
     if (args.p_action === 'open_joining') run.joining_open = true
     if (args.p_action === 'start') { run.status = 'active'; run.joining_open = false; run.started_at = new Date().toISOString() }
+    if (args.p_action === 'pause') run.status = 'paused'
+    if (args.p_action === 'resume') run.status = 'active'
     if (args.p_action === 'complete') { run.status = 'completed'; run.joining_open = false; run.completed_at = new Date().toISOString() }
     backend.version++; return { data: [run], error: null }
   }
@@ -69,17 +79,63 @@ const browser = await chromium.launch({ executablePath: await chromiumBinary.exe
 const teacherContext = await browser.newContext(); const studentOneContext = await browser.newContext(); const studentTwoContext = await browser.newContext(); const newStudentContext = await browser.newContext()
 await install(teacherContext, 'teacher', 'teacher'); await install(studentOneContext, 'student', 'student-1'); await install(studentTwoContext, 'student', 'student-2'); await install(newStudentContext, 'student', 'student-3')
 try {
-  const teacher = await teacherContext.newPage(); await teacher.goto(baseUrl); await teacher.evaluate(() => localStorage.setItem('lore-state', JSON.stringify({ view: 'mission', fundus: ['moosarchiv'], activeStory: 'moosarchiv', activeWorld: 'nebelmark' }))); await teacher.reload(); await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click(); await teacher.getByText('ASTR001', { exact: true }).waitFor(); assert.equal(await teacher.getByRole('button', { name: 'Mission beginnen' }).isVisible(), true)
-  const joinUrl = `${baseUrl}/join/ASTR001`; const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl); await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).click(); await studentOne.getByRole('button', { name: /Mit Astrofuchs/ }).click(); await studentOne.getByText('Warte bitte').waitFor(); await teacher.locator('.crew-grid b').getByText('Astrofuchs', { exact: true }).waitFor()
-  const studentTwo = await studentTwoContext.newPage(); await studentTwo.goto(joinUrl); assert.equal(await studentTwo.getByRole('button', { name: /Astrofuchs belegt/ }).isDisabled(), true); await studentTwo.getByRole('button', { name: 'Blitzbär', exact: true }).click(); await studentTwo.getByRole('button', { name: /Mit Blitzbär/ }).click(); await studentTwo.getByText('Warte bitte').waitFor(); await teacher.screenshot({ path: 'artifacts/mission-lobby-stage-1.png', fullPage: true })
-  await teacher.getByRole('button', { name: 'Zugang schließen' }).click(); const newStudent = await newStudentContext.newPage(); await newStudent.goto(joinUrl); await newStudent.getByText('Zugang zu dieser Mission ist gerade geschlossen').waitFor()
-  await studentOne.reload(); await studentOne.getByText('Warte bitte').waitFor(); teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Mission beginnen' }).click()
-  await studentOne.getByText('Missionssitzung ist aktiv').waitFor(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('1 von 2 bereit').waitFor()
-  teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Astrofuchs entfernen' }).click(); await studentOne.getByText('Du wurdest aus dieser Mission entfernt').waitFor(); await new Promise(resolve => setTimeout(resolve, 100)); assert.equal(backend.removals['student-1'], 1); await studentOne.reload(); await studentOne.getByText('Du wurdest aus dieser Mission entfernt').waitFor()
-  teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Mission abschließen' }).click(); await studentTwo.getByText('Mission ist abgeschlossen').waitFor(); await new Promise(resolve => setTimeout(resolve, 100)); assert.equal(backend.removals['student-2'], 1); assert.equal(rpc('student', 'student-2', 'update_my_mission_presence', { p_session_id: 'run-1', p_connected: true, p_ready: true }).error.message, 'MISSION_COMPLETED')
-  await teacher.getByRole('button', { name: 'Mission erneut starten' }).click(); await teacher.getByText('ASTR002', { exact: true }).waitFor(); assert.equal(backend.runs.length, 2)
-  const teacherJoin = await teacherContext.newPage(); await teacherJoin.goto(`${baseUrl}/join/ASTR002`); await teacherJoin.getByText('Dieser Browser ist als Lehrkraft angemeldet').waitFor(); assert.equal(await teacherJoin.evaluate(() => window.__LORE_SUPABASE__.auth.getSession().then(result => result.data.session.user.is_anonymous)), false)
-  await studentTwo.goto(baseUrl); await studentTwo.getByText('Schülerzugang aktiv').waitFor(); assert.equal(await studentTwo.getByText('Deine Übersicht').count(), 0)
-  await studentOne.close(); await new Promise(resolve => setTimeout(resolve, 50)); assert.ok(await studentOneContext.pages().length === 0)
-  console.log('Mission E2E with isolated teacher/student contexts passed.')
+  const teacher = await teacherContext.newPage()
+  await teacher.goto(baseUrl)
+  await teacher.evaluate(() => { const selected={ view: 'mission', fundus: ['notruf-aus-dem-all'], activeStory: 'notruf-aus-dem-all', activeWorld: 'astra' }; localStorage.setItem('lore-state', JSON.stringify(selected)); localStorage.setItem('loreboard-state-v1', JSON.stringify({ activeStory: selected.activeStory, activeWorld: selected.activeWorld })) })
+  await teacher.reload()
+  await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click()
+  await teacher.getByText('ASTR001', { exact: true }).waitFor()
+
+  const joinUrl = `${baseUrl}/join/ASTR001`
+  const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl)
+  await studentOne.locator('.astra-student').waitFor()
+  assert.equal(await studentOne.getByText('LORE ASTRA').isVisible(), true)
+  await studentOne.getByRole('button', { name: 'Astrofuchs', exact: true }).click(); await studentOne.getByRole('button', { name: /Mit Astrofuchs/ }).click()
+  await studentOne.getByText('Warte bitte').waitFor()
+
+  const studentTwo = await studentTwoContext.newPage(); await studentTwo.goto(joinUrl)
+  await studentTwo.getByRole('button', { name: 'Blitzbär', exact: true }).click(); await studentTwo.getByRole('button', { name: /Mit Blitzbär/ }).click()
+  teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Mission starten' }).click()
+  await teacher.getByText('Willkommen in der Crew-Akademie').waitFor()
+  assert.equal(backend.runs[0].status, 'active')
+  await studentOne.getByText('Willkommen in der Crew-Akademie').waitFor()
+
+  assert.equal(await teacher.getByText('10:00', { exact: true }).isVisible(), true)
+  await teacher.getByRole('button', { name: 'Eine Minute abziehen' }).click(); await teacher.getByText('09:00', { exact: true }).waitFor()
+  await teacher.locator('.scene-timer').getByRole('button', { name: 'Start', exact: true }).click(); await teacher.waitForTimeout(2100)
+  assert.notEqual(await teacher.locator('.scene-timer strong').textContent(), '09:00')
+  await teacher.locator('.scene-timer').getByRole('button', { name: 'Pause', exact: true }).click()
+  await teacher.locator('.scene-timer').getByRole('button', { name: 'Fortsetzen', exact: true }).click()
+  await teacher.getByRole('button', { name: 'Szenentimer zurücksetzen' }).click(); await teacher.getByText('09:00', { exact: true }).waitFor()
+
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Mission starten/ }).click()
+  await teacher.getByText('Das Echo der Erinnerungen').waitFor(); await studentOne.getByText('Das Echo der Erinnerungen').waitFor()
+  await teacher.getByRole('button', { name: 'NOVA-Erinnerungsrad' }).click(); await teacher.getByRole('dialog').waitFor(); await teacher.getByRole('button', { name: 'Erinnerungsrad schließen' }).click()
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Signalfragmente sichern/ }).click()
+  await studentOne.getByText('Wer gehört zur Crew?').waitFor(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).click(); await teacher.getByText('1 / 2', { exact: true }).waitFor()
+  await teacher.getByRole('button', { name: /Bereitschaft zurücksetzen/ }).click(); await studentOne.getByRole('button', { name: 'Ich bin bereit' }).waitFor()
+  await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click(); await studentOne.getByText('Übertragung pausiert').waitFor()
+  await teacher.getByRole('button', { name: /Geräte fortsetzen/ }).click(); await studentOne.getByText('Wer gehört zur Crew?').waitFor()
+  await teacher.locator('.scene-actions').getByRole('button', { name: 'Zurück' }).click(); await teacher.getByText('Das Echo der Erinnerungen').waitFor()
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Signalfragmente sichern/ }).click()
+
+  for (const actionName of ['Crew-Check abschließen','Flugplan bestätigen','Archiv schließen','Module ausgeben','Ausrüstung bestätigen']) {
+    await teacher.locator('.scene-actions').getByRole('button', { name: new RegExp(actionName) }).click()
+  }
+  await teacher.getByText('Die Reise beginnt').waitFor(); await studentTwo.getByText('Die Reise beginnt').waitFor()
+  for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366}]) {
+    await teacher.setViewportSize(viewport); assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
+  }
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Countdown starten/ }).click()
+  await teacher.getByText('10', { exact: true }).waitFor(); await teacher.getByText('0', { exact: true }).waitFor({ timeout: 13000 })
+  await teacher.locator('.media-fallback').waitFor({ timeout: 5000 })
+  await teacher.getByRole('button', { name: 'Startübertragung abschließen' }).click(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
+
+  await teacher.getByRole('button', { name: /Zurück zum Loreboard/ }).click(); await teacher.getByText('LOREBOARD').waitFor(); assert.equal(backend.runs[0].status, 'active')
+  await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
+  await teacher.reload(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
+  teacher.once('dialog', dialog => dialog.accept()); await teacher.getByRole('button', { name: 'Mission endgültig abschließen' }).click()
+  await studentTwo.getByText('Mission abgeschlossen').waitFor(); assert.equal(backend.runs[0].status, 'completed')
+  await studentTwo.reload(); await studentTwo.getByText('Mission abgeschlossen').waitFor()
+  console.log('Stage 2 mission E2E with isolated teacher/student contexts passed.')
 } finally { await teacherContext.close(); await studentOneContext.close(); await studentTwoContext.close(); await newStudentContext.close(); await browser.close() }
