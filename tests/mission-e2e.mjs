@@ -120,6 +120,7 @@ try {
     await teacher.setViewportSize(viewport)
     assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
     assert.equal(await teacher.getByRole('button', { name: 'Mission starten' }).isVisible(), true)
+    assert.equal(await teacher.getByRole('button', { name: 'Mission starten' }).isEnabled(), true)
     await teacher.screenshot({ path: `artifacts/astra-lobby-${viewport.width}x${viewport.height}.png` })
   }
   await teacher.setViewportSize({ width: 1366, height: 1024 })
