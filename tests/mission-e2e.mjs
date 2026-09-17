@@ -128,6 +128,40 @@ try {
   await teacher.getByRole('button', { name: 'QR-Code schließen' }).click()
 
   const joinUrl = `${baseUrl}/join/ASTR001`
+  for (const [label, viewport] of [['phone',{width:375,height:667}],['ipad',{width:1024,height:1366}],['desktop',{width:1440,height:1000}]]) {
+    const context = await browser.newContext({ viewport })
+    const userId = `viewport-${label}`
+    await install(context, 'student', userId)
+    const page = await context.newPage()
+    await page.goto(joinUrl)
+    const joinPage = page.locator('.student-join-page')
+    await joinPage.waitFor()
+    const scrollState = await page.evaluate(() => {
+      const root = document.documentElement
+      const pageElement = document.querySelector('.student-join-page')
+      const overflow = getComputedStyle(pageElement).overflowY
+      const contentIsTaller = root.scrollHeight > innerHeight
+      if (contentIsTaller) window.scrollTo(0, root.scrollHeight)
+      return { overflow, contentIsTaller, scrolled: !contentIsTaller || window.scrollY > 0 }
+    })
+    assert.notEqual(scrollState.overflow, 'hidden', `${label}: Beitrittsseite darf Scrollen nicht sperren`)
+    assert.equal(scrollState.scrolled, true, `${label}: höherer Inhalt ist vertikal scrollbar`)
+    const callsign = page.getByRole('button', { name: 'Astrofuchs, frei', exact: true })
+    await callsign.click()
+    const selected = page.getByRole('button', { name: 'Astrofuchs, ausgewählt', exact: true })
+    assert.equal(await selected.getAttribute('aria-pressed'), 'true')
+    assert.equal(await selected.getByText('Ausgewählt', { exact: true }).isVisible(), true)
+    assert.ok(Number.parseFloat(await selected.evaluate(element => getComputedStyle(element).borderTopWidth)) >= 3)
+    const confirm = page.getByRole('button', { name: 'Mit Astrofuchs beitreten', exact: true })
+    assert.equal(await confirm.isVisible(), true)
+    assert.equal(await confirm.isEnabled(), true)
+    await confirm.click()
+    await page.getByText('Warte bitte').waitFor()
+    await page.screenshot({ path: `artifacts/astra-student-join-${viewport.width}x${viewport.height}.png`, fullPage: true })
+    backend.participants = backend.participants.filter(person => person.userId !== userId)
+    backend.version++
+    await context.close()
+  }
   const studentOne = await studentOneContext.newPage(); await studentOne.goto(joinUrl)
   await studentOne.locator('.astra-student').waitFor()
   await studentOne.screenshot({ path: 'artifacts/astra-student-join.png' })

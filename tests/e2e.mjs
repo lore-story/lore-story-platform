@@ -100,6 +100,7 @@ try {
 
   await desktop.getByRole('button', { name: 'Loreboard öffnen' }).click()
   await desktop.getByText('TAGESROUTE').waitFor()
+  assert.equal(await desktop.getByTestId('astra-nova-assignment-media').count(), 0)
   assert.equal(await desktop.locator('.platform > aside').count(), 0)
   assert.equal(await desktop.getByRole('button', { name: /Lernjournal/ }).count(), 0)
   assert.deepEqual(await desktop.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
@@ -228,6 +229,7 @@ try {
 
   const projector = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
   projector.setDefaultTimeout(8_000)
+  await projector.route('**/nova-crew-academy.webp', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#17617b"/><circle cx="600" cy="360" r="230" fill="#7cecff"/></svg>' }))
   await installSupabaseMock(projector)
   await projector.goto(baseUrl, { waitUntil: 'networkidle' })
   await projector.evaluate(row => { localStorage.setItem('e2e-cloud-row',row); localStorage.setItem('e2e-session','1'); localStorage.setItem('lore-state',JSON.stringify({view:'loreboard',fundus:['moosarchiv'],activeStory:'moosarchiv',activeWorld:'nebelmark'})) }, astraAccountRow)
@@ -242,6 +244,18 @@ try {
   assert.equal(await projector.getByText('Mission in dieser Welt noch nicht umgesetzt', { exact: true }).count(), 0)
   assert.deepEqual(await projector.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
   assert.ok(await projector.locator('.assignment-widget').isVisible())
+  const novaMedia = projector.getByTestId('astra-nova-assignment-media')
+  assert.equal(await novaMedia.isVisible(), true)
+  const novaState = await novaMedia.evaluate(async element => {
+    const backgroundImage = getComputedStyle(element).backgroundImage
+    const url = backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1]
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    return { backgroundImage, width: image.naturalWidth, height: image.naturalHeight, elementWidth: element.getBoundingClientRect().width, elementHeight: element.getBoundingClientRect().height }
+  })
+  assert.match(novaState.backgroundImage, /nova-crew-academy\.webp/)
+  assert.ok(novaState.width > 0 && novaState.height > 0 && novaState.elementWidth > 0 && novaState.elementHeight > 0)
   assert.ok(await projector.locator('.timer-widget').isVisible())
   assert.ok(await projector.locator('.materials-widget').isVisible())
   for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366},{width:1366,height:768},{width:1180,height:820}]) {
