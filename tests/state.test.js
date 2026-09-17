@@ -70,6 +70,14 @@ test('keeps paused timers paused and marks elapsed running timers expired', () =
   assert.equal(expired.remaining, 0)
 })
 
+test('preserves intentional assignment line breaks and blank lines', async () => {
+  const assignment = 'Seite 24, Aufgabe 1\nSeite 25, Aufgabe 3\n\nArbeitsblatt vollständig bearbeiten\nZusatz: Sternchenaufgabe'
+  const storage = memoryStorage()
+  const repository = createLocalLoreboardRepository(storage)
+  await repository.save({ ...DEFAULT_LOREBOARD_STATE, assignment })
+  assert.equal((await repository.load()).assignment, assignment)
+})
+
 test('the asynchronous Loreboard repository saves and restores the complete board state', async () => {
   const values = new Map()
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
