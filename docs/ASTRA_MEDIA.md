@@ -1,8 +1,26 @@
 # Astra-Medienstatus
 
-Die öffentliche Referenzsite war aus der Build-Umgebung am 15.09.2026 nicht abrufbar (HTTP-Tunnel 403). Deshalb wurden **keine fremden Quellen, Hotlinks oder stilabweichend generierten Ersatzbilder** eingecheckt. Die Oberfläche enthält ruhige, rein mit CSS erzeugte Ersatzanzeigen; Bedienung und Szenenwechsel bleiben bei Ladefehlern vollständig verfügbar.
+## Loreboard-Hintergrund
 
-Folgende projektspezifischen Originaldateien können später ohne Codeänderung ergänzt werden:
+Das Astra-Loreboard lädt seine Medien ausschließlich aus dem öffentlichen Supabase-Bucket:
+
+- `https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/astra-loreboard-loop.mp4`
+- `https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/astra-loreboard-poster.webp`
+- `https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/nova-crew-academy.webp`
+
+Der einmalige Download von `scene-09-loop-hq.mp4` wurde am 17.09.2026 in der
+Build-Umgebung durch den ausgehenden HTTP-Tunnel mit Status 403 blockiert. Die Medien
+liegen deshalb im öffentlichen Supabase Storage; dieser Branch enthält bewusst keine
+Binärdateien.
+
+Die Hintergrundkomponente zeigt das bereitgestellte Poster während des Ladens und nach einem
+Videofehler. Bei `prefers-reduced-motion: reduce` bleibt das Video ausgeblendet, sodass
+nur das ruhige Poster beziehungsweise die dunkelblaue CSS-Grundfläche sichtbar ist.
+
+## Bestehende Szenenmedien
+
+Folgende projektspezifischen Originaldateien können weiterhin ohne Codeänderung ergänzt
+werden:
 
 - `public/media/astra/scene-ankunft.webm`
 - `public/media/astra/scene-erinnerungssignal.webm`
@@ -12,7 +30,5 @@ Folgende projektspezifischen Originaldateien können später ohne Codeänderung 
 - `public/media/astra/scene-ausruestung.webm`
 - `public/media/astra/scene-sicherheitscheck.webm`
 - `public/media/astra/scene-startfreigabe.webm`
-- `public/media/astra/launch-final.mp4` (einmalige Wiedergabe, kein Loop)
+- `public/media/astra/launch-final.mp4`
 - `public/media/astra/launch-poster.webp`
-
-Die acht Szenenmedien sollen als nahtlose, stumm abspielbare WebM-Loops exportiert werden. Das finale MP4 darf nicht loopen. Browser laden jeweils das aktuelle Medium; der Posterpfad wird früh beim Aufbau des Videoelements bekannt gemacht.

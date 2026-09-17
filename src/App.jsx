@@ -69,6 +69,11 @@ function LoginModal({ onClose, supabase, configError }) {
 }
 
 const navItems = [['overview',BookOpen,'Übersicht'],['loreboard',CirclePlay,'Loreboard'],['werkstatt',PenLine,'Werkstatt'],['fundus',Gem,'Fundus'],['market',ShoppingBag,'Lore-Market'],['weltwechsler',Compass,'Weltwechsler']]
+const ASTRA_LOREBOARD_MEDIA = Object.freeze({
+  video: 'https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/astra-loreboard-loop.mp4',
+  poster: 'https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/astra-loreboard-poster.webp',
+  nova: 'https://yoxpqqxhpkikkkotlrrk.supabase.co/storage/v1/object/public/lore-story-media/astra/loreboard/nova-crew-academy.webp',
+})
 
 function Platform(props) {
   const {view,setView,onLogout,toast,user}=props; const [mobile,setMobile]=useState(false); const [accountOpen,setAccountOpen]=useState(false)
@@ -104,6 +109,7 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setAc
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [minutes, setMinutes] = useState(10)
   const [seconds, setSeconds] = useState(0)
+  const [astraVideoFailed, setAstraVideoFailed] = useState(false)
   const skipInitialSave = useRef(true)
   const saveVersion = useRef(0)
 
@@ -152,6 +158,7 @@ function LoreboardMode({ fundus, activeStory, setActiveStory, activeWorld, setAc
 
   const configuredTheme=getWorldTheme(world.id)
   return <main className={`loreboard-mode ${configuredTheme ? `world-${world.id}` : ''}`} style={{'--lore-accent':world.colors[0],'--lore-deep':world.colors[1],...themeVariables(configuredTheme)}}>
+    {world.id==='astra'&&<div className={`astra-board-background ${astraVideoFailed?'video-unavailable':''}`} aria-hidden="true" style={{'--astra-board-poster':`url(${ASTRA_LOREBOARD_MEDIA.poster})`}}><div className="astra-board-poster"/><video autoPlay muted loop playsInline preload="metadata" poster={ASTRA_LOREBOARD_MEDIA.poster} onError={()=>setAstraVideoFailed(true)}><source src={ASTRA_LOREBOARD_MEDIA.video} type="video/mp4"/></video><div className="astra-board-tint"/></div>}
     <div className="lore-ambient"/><header className="loreboard-topbar"><div className="loreboard-brand"><span>{world.icon}</span><div><small>LOREBOARD</small><b>{world.name}</b></div></div><div className="live-clock"><div><strong>{now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</strong><small>{now.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'})}</small></div></div><div className="loreboard-controls"><span className={`save-status ${saveStatus.includes('fehl')?'error':''}`} role="status">{saveStatus}</span><button onClick={toggleFullscreen} aria-label="Vollbild öffnen"><Maximize/> Vollbild</button><button className="exit-board" onClick={()=>setView('overview')}><ArrowLeft/> Zur Übersicht</button></div></header>
     <section className="command-grid">
       <aside className="route-strip" aria-label="Tagesroute"><div className="route-heading"><div><span>TAGESROUTE</span><h2>Unser Ablauf</h2></div><b>{board.activePhase+1}/{board.phases.length}</b><button aria-label="Tagesroute bearbeiten" onClick={openRoute}><PenLine/></button></div><div className="route-items">{board.phases.map((item,index)=><button className={index===board.activePhase?'active':''} onClick={()=>update({activePhase:index})} key={`${item}-${index}`} aria-pressed={index===board.activePhase}><i>{String(index+1).padStart(2,'0')}</i><span>{item}</span></button>)}</div><article className="story-launcher"><div><span>AKTIVE MISSION</span><strong>{story.title}</strong><small>{storyCategoryLabel(story)} · {story.subject}</small></div><button className="mission-picker" onClick={()=>setDialog('mission')} aria-label="Andere Mission auswählen"><Settings2/></button><button className="mission-play" aria-label="Mission vorbereiten" onClick={()=>setView('mission')} disabled={!mission} title={!mission?'Mission in dieser Welt noch nicht umgesetzt':undefined}><Play/></button></article></aside>
