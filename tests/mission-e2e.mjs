@@ -15,7 +15,7 @@ async function assertAstraTypography(page, rootSelector, headingSelector) {
   assert.equal(typography.forbiddenCount, 0, typography.forbidden?.join(', '))
   assert.equal(typography.interLoaded, true)
 }
-const backend = { version: 0, runs: [], participants: [], nextRun: 1, nextParticipant: 1, removals: {}, finaleFinishCalls: 0 }
+const backend = { version: 0, runs: [], participants: [], nextRun: 1, nextParticipant: 1, removals: {}, finaleFinishCalls: 0, finaleFinishCallsBySession: {} }
 const callsigns = ['Astrofuchs', 'Blitzbär', 'Cosmo']
 const codeFor = number => `ASTR${String(number).padStart(3, '0')}`
 function rpc(role, userId, name, args) {
@@ -51,6 +51,7 @@ function rpc(role, userId, name, args) {
   }
   if (name === 'finish_mission_finale') {
     backend.finaleFinishCalls++
+    if (run) backend.finaleFinishCallsBySession[run.id] = (backend.finaleFinishCallsBySession[run.id] || 0) + 1
     if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
     run.finale_status = 'finished'; backend.version++; return { data: [run], error: null }
   }
@@ -250,9 +251,12 @@ try {
   await teacherCountdown.waitFor({ state: 'hidden', timeout: 13000 })
   await studentTwo.locator('.student-finale-countdown').waitFor({ state: 'hidden', timeout: 3000 })
   await teacher.locator('.media-fallback').waitFor({ timeout: 5000 })
+  await studentTwo.getByText('Startsequenz läuft', { exact: true }).waitFor({ timeout: 3000 })
+  assert.equal(await studentTwo.getByText('AKTUELLER AUFTRAG', { exact: true }).count(), 0)
   await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor({ timeout: 9000 })
-  await studentTwo.getByText('Fortsetzung folgt', { exact: true }).waitFor({ timeout: 3000 })
+  await studentTwo.locator('.student-finale').getByText('Fortsetzung folgt', { exact: true }).waitFor({ timeout: 3000 })
   assert.equal(backend.finaleFinishCalls, 1)
+  assert.equal(backend.finaleFinishCallsBySession['run-1'], 1)
 
   await teacher.getByRole('button', { name: /Zurück zum Loreboard/ }).click(); await teacher.getByText('LOREBOARD').waitFor(); assert.equal(backend.runs[0].status, 'active')
   await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
@@ -263,5 +267,31 @@ try {
   await studentOne.getByText(/Mission ist bereits abgeschlossen/).waitFor()
   assert.equal(await studentOne.getByRole('button', { name: /Erneut beitreten/ }).isEnabled(), true)
   await studentTwo.reload(); await studentTwo.getByText('Mission abgeschlossen').waitFor()
-  console.log('Stage 2 mission E2E with isolated teacher/student contexts passed.')
+
+  // A second complete mission run resets the one-shot finale guard for the new session.
+  await teacher.getByRole('button', { name: 'Neuen Durchlauf erstellen' }).click()
+  await teacher.getByText('ASTR002', { exact: true }).waitFor()
+  const secondJoinUrl = `${baseUrl}/join/ASTR002`
+  await studentTwo.goto(secondJoinUrl)
+  await studentTwo.getByRole('button', { name: 'Astrofuchs', exact: true }).click()
+  await studentTwo.getByRole('button', { name: /Mit Astrofuchs/ }).click()
+  teacher.once('dialog', dialog => dialog.accept())
+  await teacher.getByRole('button', { name: 'Mission starten' }).click()
+  await teacher.getByText('Willkommen in der Crew-Akademie').waitFor()
+  for (const actionName of ['Zur Erinnerungsübertragung','Signalfragmente sichern','Crew-Check abschließen','Flugplan bestätigen','Archiv schließen','Module ausgeben','Ausrüstung bestätigen']) {
+    await teacher.locator('.scene-actions').getByRole('button', { name: new RegExp(actionName) }).click()
+  }
+  await teacher.getByRole('heading', { name: 'Die Reise beginnt', exact: true }).waitFor()
+  await teacher.locator('.scene-actions').getByRole('button', { name: /Countdown starten/ }).click()
+  await studentTwo.locator('.student-finale-countdown').waitFor()
+  await studentTwo.getByText('Startsequenz läuft', { exact: true }).waitFor({ timeout: 13000 })
+  assert.equal(await studentTwo.getByText('AKTUELLER AUFTRAG', { exact: true }).count(), 0)
+  await studentTwo.locator('.student-finale').getByText('Fortsetzung folgt', { exact: true }).waitFor({ timeout: 9000 })
+  await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
+  assert.equal(backend.finaleFinishCalls, 2)
+  assert.equal(backend.finaleFinishCallsBySession['run-2'], 1)
+  teacher.once('dialog', dialog => dialog.accept())
+  await teacher.getByRole('button', { name: 'Mission endgültig abschließen' }).click()
+  await studentTwo.getByText('Mission abgeschlossen').waitFor()
+  console.log('Stage 2 mission E2E with two isolated teacher/student finale runs passed.')
 } finally { await teacherContext.close(); await studentOneContext.close(); await studentTwoContext.close(); await newStudentContext.close(); await browser.close() }

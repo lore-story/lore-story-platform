@@ -59,6 +59,7 @@ function MissionRuntime({ supabase, onBack, theme, mission }) {
   const load = useCallback(async id => { const rows = await repo.list(); setSessions(rows); const found = rows.find(x => x.id === (id || selectedId.current)) || rows.find(x => x.status !== 'completed') || rows[0] || null; if (found) { selectedId.current = found.id; window.localStorage.setItem(OPEN_SESSION_KEY, found.id) } setSession(found); setParticipants(found ? await repo.participants(found.id) : []) }, [repo])
   const refresh = useCallback(async () => { try { await load(); setError('') } catch { setError('Missionsdaten konnten nicht geladen werden.') } finally { setLoading(false) } }, [load])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { if (!session?.id || session.finale_status === 'idle') finaleFinishRequested.current = false }, [session?.id, session?.finale_status])
   useEffect(() => session ? repo.subscribe(session.id, refresh, status => setOnline(status === 'SUBSCRIBED')) : undefined, [refresh, repo, session?.id])
   useEffect(() => { if (!session) return; QRCode.toDataURL(`${window.location.origin}/join/${session.join_code}`, { width: 240, margin: 1, color: { dark: '#03111f', light: '#ffffff' } }).then(setQr) }, [session?.id, session?.join_code])
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
