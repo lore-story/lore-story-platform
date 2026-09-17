@@ -16,3 +16,7 @@ Die neue `security definer`-RPC prüft die Lehrkraft serverseitig, verweigert ab
 ## Weiterhin fehlende Medien
 
 Die acht szenenspezifischen Astra-Loops, das Startvideo und das Poster unter `/media/astra/` sind weiterhin nicht Bestandteil dieses Schritts. Bei fehlenden Dateien zeigt die Mission bewusst eine ruhige Astra-Fläche mit dem dezenten Hinweis „Szenenbild folgt“. Das NOVA-Erinnerungsrad ist funktional erhalten.
+
+## Deployment-Schritt für den synchronisierten Abschluss
+
+Die additive Migration `supabase/migrations/202609170001_sync_mission_finale.sql` wurde bewusst nicht gegen das entfernte Projekt ausgeführt. Vor dem Deployment ist sie einmalig im Supabase SQL Editor (oder über den kontrollierten Migration-Workflow) auszuführen. Sie ergänzt ausschließlich die Abschlussfelder und die abgesicherten Lehrer-RPCs; bestehende produktive Migrationen bleiben unverändert.

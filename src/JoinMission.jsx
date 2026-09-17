@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Check, Radio, RefreshCw, Rocket, Wifi, WifiOff } from 'lucide-react'
+import { ArrowLeft, Check, Expand, Radio, RefreshCw, Rocket, Wifi, WifiOff } from 'lucide-react'
 import { createLiveController, HEARTBEAT_INTERVAL_MS, joinBlockedReason, logMissionError, missionErrorMessage, STORY_SLUG } from './mission'
 import { getMissionPackage, themeVariables } from './worldThemes'
 
@@ -14,6 +14,7 @@ export default function JoinMission({ supabase, code }) {
   const [message, setMessage] = useState('')
   const [online, setOnline] = useState(window.navigator.onLine)
   const [teacherBrowser, setTeacherBrowser] = useState(false)
+  const [, setClock] = useState(Date.now())
   const liveController = useRef(null)
   if (!liveController.current) liveController.current = createLiveController(channel => supabase.removeChannel(channel), timer => window.clearInterval(timer))
   const autoReconnectAttempted = useRef(false)
@@ -41,7 +42,11 @@ export default function JoinMission({ supabase, code }) {
       }
       const { data, error } = await supabase.rpc('inspect_mission', { p_code: normalized })
       if (error) throw error
-      const inspected = data?.[0]
+      let inspected = data?.[0]
+      if (inspected?.participant_id) {
+        const { data: rows } = await supabase.from('mission_sessions').select('finale_started_at,finale_target_at,finale_status').eq('id', inspected.session_id)
+        inspected = { ...inspected, ...(Array.isArray(rows) ? rows[0] : rows) }
+      }
       setInfo(inspected)
       if (inspected?.participant_status === 'removed') {
         if (!retryRemoved) showRemoved()
@@ -137,6 +142,8 @@ export default function JoinMission({ supabase, code }) {
     }
   }, [inspect, join, normalized, stopLive])
 
+  useEffect(() => { const timer=window.setInterval(()=>setClock(Date.now()),1000); return()=>window.clearInterval(timer) }, [])
+
   useEffect(() => {
     if (screen === 'waiting' && info?.participant_id) startLive(info)
   }, [info?.participant_id, screen, startLive])
@@ -159,5 +166,8 @@ export default function JoinMission({ supabase, code }) {
   const completed = info.status === 'completed'
   const scene = missionPackage.scenes.find(item => item.id === info.current_scene_id) || missionPackage.scenes[0]
   const paused = info.status === 'paused'
-  return <main className={themedPage} style={themeVariables(theme)}><div className="join-card"><div className={`connection ${online ? 'online' : ''}`}>{online ? <Wifi/> : <WifiOff/>}{online ? 'Crew-Netzwerk verbunden' : 'Verbindung unterbrochen'}</div><div className="student-access-state">{info.joining_open?'Zugang geöffnet':'Zugang geschlossen'}</div><Rocket/><small>RUFZEICHEN · {chosen}</small><h1>{completed ? 'Mission abgeschlossen' : paused ? 'Übertragung pausiert' : scene.title}</h1><h2>{info.title}</h2>{completed ? <p>Danke für deinen Einsatz. Die {theme.name}-Crew meldet sich wieder.</p> : paused ? <p>NOVA: Bleib an deinem Platz. Die Lehrkraft setzt die Übertragung fort.</p> : active ? <><div className="student-nova"><b>NOVA</b><p>{scene.message}</p></div><section className="student-task"><small>AKTUELLE AUFGABE</small><strong>{scene.task}</strong></section>{scene.ready && <button className="primary" onClick={() => ready(!info.ready_scene_id)}>{info.ready_scene_id === info.current_scene_id ? <><Check/> Bereitschaft gemeldet</> : <><Radio/> Ich bin bereit</>}</button>}{scene.ready && info.ready_scene_id === info.current_scene_id && <p className="student-wait">Signal gesichert. Warte auf deine Crew.</p>}</> : <p>NOVA: Warte bitte, bis die Lehrkraft die Mission startet.</p>}{message && <p role="alert">{message}</p>}</div></main>
+  const finaleRemaining=info.finale_target_at&&info.finale_status==='countdown'?Math.max(0,Math.ceil((new Date(info.finale_target_at).getTime()-Date.now())/1000)):null
+  const finaleStarting=info.finale_status==='countdown'&&finaleRemaining===0
+  const finaleFinished=info.finale_status==='finished'
+  return <main className={themedPage} style={themeVariables(theme)}><section className="student-runtime"><header className="student-runtime-header"><div className={`connection ${online ? 'online' : ''}`}>{online ? <Wifi/> : <WifiOff/>}{online ? 'Crew-Netzwerk verbunden' : 'Verbindung unterbrochen'}</div><span className="student-access-state">{info.joining_open?'Zugang geöffnet':'Zugang geschlossen'}</span><button aria-label="Vollbild öffnen" onClick={()=>document.documentElement.requestFullscreen?.()}><Expand/></button></header><div><small>RUFZEICHEN · {chosen}</small><h1>{completed ? 'Mission abgeschlossen' : paused ? 'Übertragung pausiert' : finaleFinished?'Fortsetzung folgt':finaleStarting?'Astra startet':scene.title}</h1><h2>{info.title}</h2></div>{finaleRemaining!==null&&finaleRemaining>0?<div className="student-finale-countdown" aria-live="assertive">{finaleRemaining}</div>:finaleStarting?<div className="student-launch-sequence" role="status"><span>ASTRA</span><strong>Startsequenz läuft</strong></div>:finaleFinished?<div className="student-finale" role="status"><strong>Fortsetzung folgt</strong></div>:<div className="student-runtime-content">{completed ? <p>Danke für deinen Einsatz. Die {theme.name}-Crew meldet sich wieder.</p> : paused ? <p>NOVA: Bleib an deinem Platz. Die Lehrkraft setzt die Übertragung fort.</p> : active ? <><div className="student-nova"><b>NOVA</b><p>{scene.message}</p></div><section className="student-task"><small>AKTUELLER AUFTRAG</small><strong>{scene.task}</strong></section></> : <p>NOVA: Warte bitte, bis die Lehrkraft die Mission startet.</p>}</div>}{scene.ready&&active&&finaleRemaining===null&&!finaleFinished&&!finaleStarting&&<button className="primary" onClick={() => ready(!info.ready_scene_id)}>{info.ready_scene_id === info.current_scene_id ? <><Check/> Bereitschaft gemeldet</> : <><Radio/> Ich bin bereit</>}</button>}{message && <p role="alert">{message}</p>}</section></main>
 }
