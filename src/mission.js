@@ -50,7 +50,7 @@ export function logMissionError(operation, error) {
   console.error(`[Mission] ${operation} fehlgeschlagen`, error)
 }
 
-const SESSION_COLUMNS = 'id,story_slug,title,join_code,status,joining_open,current_scene_id,created_at,started_at,completed_at,updated_at'
+const SESSION_COLUMNS = 'id,story_slug,title,join_code,status,joining_open,current_scene_id,finale_started_at,finale_target_at,finale_status,created_at,started_at,completed_at,updated_at'
 const PARTICIPANT_COLUMNS = 'id,session_id,callsign,status,ready_scene_id,joined_at,last_seen_at,removed_at'
 
 export function createMissionRepository(client) {
@@ -68,6 +68,8 @@ export function createMissionRepository(client) {
     create: loreboardId => rpcOne('create_mission_session', { p_loreboard_id: loreboardId || null }),
     update: (id, action) => rpcOne('update_mission_session', { p_session_id: id, p_action: action }),
     setScene: (id, scene) => rpcOne('set_mission_scene', { p_session_id: id, p_scene_id: scene }),
+    startFinale: id => rpcOne('start_mission_finale', { p_session_id: id }),
+    finishFinale: id => rpcOne('finish_mission_finale', { p_session_id: id }),
     resetReady: async (id, scene) => { const { error } = await client.rpc('reset_mission_readiness', { p_session_id: id, p_scene_id: scene }); if (error) throw error },
     async participants(id) {
       const { data, error } = await client.from('mission_participants').select(PARTICIPANT_COLUMNS).eq('session_id', id).order('callsign')

@@ -75,10 +75,10 @@ test('participant cleanup is teacher-only, heartbeat-bound and clears readiness'
   assert.match(sql,/ready_scene_id=null/)
   assert.match(sql,/revoke all.*public,anon/is)
 })
-test('feedback archive and profile actions are honest and explicit', async () => {
+test('unimplemented feedback action stays hidden and profile actions are explicit', async () => {
   const mission=await readFile(new globalThis.URL('../src/MissionLobby.jsx',import.meta.url),'utf8')
   const app=await readFile(new globalThis.URL('../src/App.jsx',import.meta.url),'utf8')
-  assert.match(mission,/Noch nicht verfügbar/)
+  assert.doesNotMatch(mission,/Feedback-Archiv ist noch nicht verfügbar/)
   assert.match(app,/Kontomenü öffnen/)
   assert.match(app,/> Abmelden</)
 })

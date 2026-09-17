@@ -23,7 +23,7 @@ function rpc(role, userId, name, args) {
   if (name === 'create_mission_session') {
     if (role !== 'teacher') return fail('TEACHER_REQUIRED')
     if (backend.runs.some(run => run.status !== 'completed')) return fail('OPEN_SESSION_EXISTS')
-    const now = new Date().toISOString(); const run = { id: `run-${backend.nextRun}`, story_slug: 'lore-astra-notruf-aus-dem-all', title: 'Notruf aus dem All', join_code: codeFor(backend.nextRun++), status: 'lobby', joining_open: true, current_scene_id: 'ankunft', created_at: now, started_at: null, completed_at: null, updated_at: now }
+    const now = new Date().toISOString(); const run = { id: `run-${backend.nextRun}`, story_slug: 'lore-astra-notruf-aus-dem-all', title: 'Notruf aus dem All', join_code: codeFor(backend.nextRun++), status: 'lobby', joining_open: true, current_scene_id: 'ankunft', created_at: now, started_at: null, completed_at: null, updated_at: now, finale_started_at: null, finale_target_at: null, finale_status: 'idle' }
     backend.runs.unshift(run); backend.version++; return { data: [run], error: null }
   }
   const run = backend.runs.find(item => item.id === args.p_session_id || item.join_code === args.p_code)
@@ -44,6 +44,14 @@ function rpc(role, userId, name, args) {
     if (!own || own.status === 'removed') { participant.callsign = args.p_callsign; participant.ready_scene_id = null; participant.removed_at = null; participant.joined_at = new Date().toISOString() }
     participant.status = 'connected'; participant.last_seen_at = new Date().toISOString(); if (!own) backend.participants.push(participant); backend.version++
     return { data: [{ ...run, session_id: run.id, participant_id: participant.id, callsign: participant.callsign, ready_scene_id: participant.ready_scene_id }], error: null }
+  }
+  if (name === 'start_mission_finale') {
+    if (!run || role !== 'teacher' || run.status === 'completed' || run.finale_status !== 'idle') return fail('MISSION_FORBIDDEN')
+    run.finale_started_at = new Date().toISOString(); run.finale_target_at = new Date(Date.now() + 10_000).toISOString(); run.finale_status = 'countdown'; backend.version++; return { data: [run], error: null }
+  }
+  if (name === 'finish_mission_finale') {
+    if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
+    run.finale_status = 'finished'; backend.version++; return { data: [run], error: null }
   }
   if (name === 'set_mission_scene') {
     if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
@@ -178,6 +186,11 @@ try {
   await studentTwo.getByRole('button', { name: /Mit Astrofuchs/ }).click()
   await studentTwo.getByText('Willkommen in der Crew-Akademie').waitFor()
   assert.equal(await studentTwo.getByText('Zugang geöffnet', { exact: true }).isVisible(), true)
+  for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366},{width:1366,height:768},{width:1180,height:820}]) {
+    await studentTwo.setViewportSize(viewport)
+    assert.equal(await studentTwo.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
+    await studentTwo.screenshot({ path: `artifacts/astra-student-runtime-${viewport.width}x${viewport.height}.png` })
+  }
   await teacher.locator('.astra-story>header').getByText('1 Crewmitglied', { exact: true }).waitFor()
   await teacher.getByRole('button', { name: /Alle Geräte pausieren/ }).click()
   await studentTwo.getByText('Übertragung pausiert').waitFor()
@@ -216,7 +229,7 @@ try {
   await teacher.getByRole('heading', { name: 'Die Reise beginnt', exact: true }).waitFor(); await studentTwo.getByText('Die Reise beginnt').waitFor()
   assert.equal(await teacher.getByText('Crew verwalten').isVisible(), true)
   await teacher.getByText('Crew verwalten').click(); assert.equal(await teacher.locator('.crew-manager').getByText('Astrofuchs', { exact: true }).isVisible(), true)
-  for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366}]) {
+  for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366},{width:1366,height:768},{width:1180,height:820}]) {
     await teacher.setViewportSize(viewport); await teacher.screenshot({ path: `artifacts/astra-runtime-${viewport.width}x${viewport.height}.png` }); assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
   }
   await teacher.locator('.crew-manager summary').click()
