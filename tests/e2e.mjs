@@ -132,12 +132,19 @@ try {
   await desktop.getByRole('button', { name: 'Speichern', exact: true }).click()
   assert.equal(await desktop.locator('.material-list li').count(), 8)
   assert.equal(await desktop.locator('.material-list button').count(), 0)
-  const assignment = `Erkundungsauftrag ${Date.now()}`
+  const assignment = `Erkundungsauftrag ${Date.now()}\nBeobachtet die Spuren.\n\nHaltet eure Ergebnisse fest.`
   await desktop.getByRole('button', { name: 'Auftrag bearbeiten' }).click()
   await desktop.getByLabel('Aktueller Auftrag bearbeiten').fill(assignment)
   await desktop.getByRole('button', { name: 'Auftrag speichern' }).click()
   await desktop.getByText('Online gespeichert', { exact: true }).waitFor()
-  assert.match(await desktop.evaluate(() => localStorage.getItem('loreboard-state-v1')), new RegExp(assignment))
+  assert.equal(await desktop.evaluate(() => JSON.parse(localStorage.getItem('loreboard-state-v1')).assignment), assignment)
+  await desktop.reload({ waitUntil: 'networkidle' })
+  assert.equal(await desktop.locator('.assignment-display').innerText(), assignment)
+  await desktop.getByRole('button', { name: 'Auftrag bearbeiten' }).click()
+  await desktop.getByLabel('Aktueller Auftrag bearbeiten').fill(Array.from({ length: 9 }, (_, index) => `Zeile ${index + 1}`).join('\n'))
+  await desktop.getByText(/Der Auftrag ist zu lang für die Präsentationskarte/).waitFor()
+  assert.equal(await desktop.getByRole('button', { name: 'Auftrag speichern' }).isDisabled(), true)
+  await desktop.getByRole('button', { name: 'Abbrechen' }).click()
   await desktop.getByRole('button', { name: 'Tagesroute bearbeiten' }).click()
   await desktop.getByLabel('Routenpunkt 2', { exact: true }).fill('Gemeinsam entdecken')
   await desktop.getByRole('button', { name: 'Speichern', exact: true }).click()
@@ -258,9 +265,36 @@ try {
   assert.ok(hamsterState.width > 0 && hamsterState.height > 0 && hamsterState.elementWidth > 0 && hamsterState.elementHeight > 0)
   assert.ok(await projector.locator('.timer-widget').isVisible())
   assert.ok(await projector.locator('.materials-widget').isVisible())
+  const presentationAssignment = Array.from({ length: 8 }, (_, index) => `${index + 1}. Prüft die Hinweise.`).join('\n')
+  await projector.getByRole('button', { name: 'Auftrag bearbeiten' }).click()
+  await projector.getByLabel('Aktueller Auftrag bearbeiten').fill(presentationAssignment)
+  await projector.getByRole('button', { name: 'Auftrag speichern' }).click()
+  await projector.getByText('Online gespeichert', { exact: true }).waitFor()
+  await projector.reload({ waitUntil: 'networkidle' })
+  assert.equal(await projector.locator('.assignment-display').innerText(), presentationAssignment)
   for (const viewport of [{width:1920,height:1080},{width:1440,height:1000},{width:1024,height:1366},{width:1366,height:768},{width:1180,height:820}]) {
     await projector.setViewportSize(viewport)
     assert.deepEqual(await projector.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
+    const layout = await projector.evaluate(() => {
+      const card = document.querySelector('.assignment-card')
+      const stage = document.querySelector('.astra-assignment-stage')
+      const assignment = document.querySelector('.assignment-display')
+      const assignmentLabel = document.querySelector('.assignment-card .widget-title span')
+      const materialLabel = document.querySelector('.materials-widget .widget-title span')
+      return {
+        cardRatio: card.getBoundingClientRect().height / stage.getBoundingClientRect().height,
+        assignmentFontSize: parseFloat(getComputedStyle(assignment).fontSize),
+        assignmentOverflow: assignment.scrollHeight > assignment.clientHeight || assignment.scrollWidth > assignment.clientWidth,
+        cardOverflow: card.scrollHeight > card.clientHeight || card.scrollWidth > card.clientWidth,
+        assignmentLabelSize: parseFloat(getComputedStyle(assignmentLabel).fontSize),
+        materialLabelSize: parseFloat(getComputedStyle(materialLabel).fontSize),
+      }
+    })
+    assert.ok(layout.assignmentLabelSize > 11 && layout.materialLabelSize > 11)
+    assert.ok(layout.assignmentFontSize <= 32)
+    assert.equal(layout.assignmentOverflow, false)
+    assert.equal(layout.cardOverflow, false)
+    assert.ok(layout.cardRatio >= (viewport.width > 1100 ? 0.5 : 0.48))
     await projector.screenshot({ path: `artifacts/loreboard-${viewport.width}x${viewport.height}.png` })
   }
 

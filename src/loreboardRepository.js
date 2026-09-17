@@ -3,13 +3,17 @@ import { DEFAULT_MATERIALS, DEFAULT_TIMER, restoreTimer } from './state.js'
 export const LOREBOARD_STORAGE_KEY = 'loreboard-state-v1'
 export const MAX_MATERIALS = 8
 export const MAX_ASSIGNMENT_LENGTH = 220
+export const MAX_ASSIGNMENT_LINES = 8
 export const DEFAULT_LOREBOARD_STATE = Object.freeze({ phases: ['Ankommen', 'Entdecken', 'Vertiefen', 'Teilen'], activePhase: 0, assignment: 'Findet heraus, wie Lebewesen im Wald miteinander verbunden sind.', materials: DEFAULT_MATERIALS, timer: DEFAULT_TIMER, noiseLevel: 'Partner', activeStory: 'moosarchiv', activeWorld: 'nebelmark', presentationWorldId: 'nebelmark' })
 
 export function normalizeLoreboard(value, now = Date.now()) {
   const phases = Array.isArray(value?.phases) && value.phases.length ? value.phases.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim()) : [...DEFAULT_LOREBOARD_STATE.phases]
   const materials = Array.isArray(value?.materials) ? value.materials.filter(x => typeof x === 'string' && x.trim()).slice(0, MAX_MATERIALS) : [...DEFAULT_MATERIALS]
   const activeWorld = typeof value?.activeWorld === 'string' ? value.activeWorld : DEFAULT_LOREBOARD_STATE.activeWorld
-  return { phases, activePhase: Math.min(Math.max(0, Number(value?.activePhase) || 0), phases.length - 1), assignment: typeof value?.assignment === 'string' && value.assignment.trim() ? value.assignment.slice(0, MAX_ASSIGNMENT_LENGTH) : DEFAULT_LOREBOARD_STATE.assignment, materials, timer: restoreTimer({ getItem: () => JSON.stringify(value?.timer ?? DEFAULT_TIMER) }, now), noiseLevel: ['Leise','Partner','Frei'].includes(value?.noiseLevel) ? value.noiseLevel : DEFAULT_LOREBOARD_STATE.noiseLevel, activeStory: typeof value?.activeStory === 'string' ? value.activeStory : DEFAULT_LOREBOARD_STATE.activeStory, activeWorld, presentationWorldId: typeof value?.presentationWorldId === 'string' ? value.presentationWorldId : activeWorld }
+  const assignment = typeof value?.assignment === 'string' && value.assignment.trim()
+    ? value.assignment.split('\n').slice(0, MAX_ASSIGNMENT_LINES).join('\n').slice(0, MAX_ASSIGNMENT_LENGTH)
+    : DEFAULT_LOREBOARD_STATE.assignment
+  return { phases, activePhase: Math.min(Math.max(0, Number(value?.activePhase) || 0), phases.length - 1), assignment, materials, timer: restoreTimer({ getItem: () => JSON.stringify(value?.timer ?? DEFAULT_TIMER) }, now), noiseLevel: ['Leise','Partner','Frei'].includes(value?.noiseLevel) ? value.noiseLevel : DEFAULT_LOREBOARD_STATE.noiseLevel, activeStory: typeof value?.activeStory === 'string' ? value.activeStory : DEFAULT_LOREBOARD_STATE.activeStory, activeWorld, presentationWorldId: typeof value?.presentationWorldId === 'string' ? value.presentationWorldId : activeWorld }
 }
 
 export function createLocalLoreboardRepository(storage) {
