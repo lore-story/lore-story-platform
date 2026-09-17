@@ -15,7 +15,7 @@ async function assertAstraTypography(page, rootSelector, headingSelector) {
   assert.equal(typography.forbiddenCount, 0, typography.forbidden?.join(', '))
   assert.equal(typography.interLoaded, true)
 }
-const backend = { version: 0, runs: [], participants: [], nextRun: 1, nextParticipant: 1, removals: {} }
+const backend = { version: 0, runs: [], participants: [], nextRun: 1, nextParticipant: 1, removals: {}, finaleFinishCalls: 0 }
 const callsigns = ['Astrofuchs', 'Blitzbär', 'Cosmo']
 const codeFor = number => `ASTR${String(number).padStart(3, '0')}`
 function rpc(role, userId, name, args) {
@@ -50,6 +50,7 @@ function rpc(role, userId, name, args) {
     run.finale_started_at = new Date().toISOString(); run.finale_target_at = new Date(Date.now() + 10_000).toISOString(); run.finale_status = 'countdown'; backend.version++; return { data: [run], error: null }
   }
   if (name === 'finish_mission_finale') {
+    backend.finaleFinishCalls++
     if (!run || role !== 'teacher' || run.status === 'completed') return fail('MISSION_FORBIDDEN')
     run.finale_status = 'finished'; backend.version++; return { data: [run], error: null }
   }
@@ -235,9 +236,23 @@ try {
   await teacher.locator('.crew-manager summary').click()
   await teacher.screenshot({ path: 'artifacts/astra-mission-nova.png' })
   await teacher.locator('.scene-actions').getByRole('button', { name: /Countdown starten/ }).click()
-  await teacher.getByText('10', { exact: true }).waitFor(); await teacher.getByText('0', { exact: true }).waitFor({ timeout: 13000 })
+  const teacherCountdown = teacher.locator('.countdown')
+  const studentCountdown = studentTwo.locator('.student-finale-countdown')
+  await teacherCountdown.waitFor(); await studentCountdown.waitFor()
+  const teacherRemaining = Number(await teacherCountdown.textContent())
+  const studentRemaining = Number(await studentCountdown.textContent())
+  assert.ok(Math.abs(teacherRemaining - studentRemaining) <= 1, 'Lehrer und Schüler verwenden denselben Zielzeitpunkt')
+  await studentTwo.waitForTimeout(2200)
+  const beforeReload = Number(await studentCountdown.textContent())
+  await studentTwo.reload(); await studentTwo.locator('.student-finale-countdown').waitFor()
+  const afterReload = Number(await studentTwo.locator('.student-finale-countdown').textContent())
+  assert.ok(afterReload <= beforeReload && afterReload >= beforeReload - 2, 'Reload stellt die serverseitige Restzeit wieder her')
+  await teacherCountdown.waitFor({ state: 'hidden', timeout: 13000 })
+  await studentTwo.locator('.student-finale-countdown').waitFor({ state: 'hidden', timeout: 3000 })
   await teacher.locator('.media-fallback').waitFor({ timeout: 5000 })
-  await teacher.getByRole('button', { name: 'Startübertragung abschließen' }).click(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()
+  await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor({ timeout: 9000 })
+  await studentTwo.getByText('Fortsetzung folgt', { exact: true }).waitFor({ timeout: 3000 })
+  assert.equal(backend.finaleFinishCalls, 1)
 
   await teacher.getByRole('button', { name: /Zurück zum Loreboard/ }).click(); await teacher.getByText('LOREBOARD').waitFor(); assert.equal(backend.runs[0].status, 'active')
   await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click(); await teacher.locator('.astra-finale').getByText('Fortsetzung folgt').waitFor()

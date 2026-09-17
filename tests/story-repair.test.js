@@ -87,7 +87,8 @@ test('Astra contrast tokens meet AA-oriented dark palette contract', async () =>
   assert.match(theme,/text: '#f2f8fc'/)
   assert.match(theme,/muted: '#8ca9b9'/)
   const css=await readFile(new globalThis.URL('../src/styles.css',import.meta.url),'utf8')
-  assert.match(css,/\.loreboard-mode\.world-astra[\s\S]*var\(--world-text\)/)
+  assert.match(css,/\.loreboard-mode\.world-astra[\s\S]*color:#f3fbff/)
+  assert.doesNotMatch(css,/\/\* Full-screen classroom Loreboard \*\//)
 })
 
 test('running mission keeps crew and access controls until final confirmation', async () => {
