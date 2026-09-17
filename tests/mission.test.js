@@ -94,3 +94,17 @@ test('all corrected mission RPCs retain hardening and explicit conflict detectio
   assert.match(sql, /revoke all on function[\s\S]+from public,anon;/i)
   assert.match(sql, /grant execute on function[\s\S]+to authenticated;/i)
 })
+
+test('rejoin migration separates first join, reconnect and removed-participant reactivation', async () => {
+  const sql = await readFile(new globalThis.URL('../supabase/migrations/202609160002_allow_removed_participant_rejoin.sql', import.meta.url), 'utf8')
+  const join = sql.match(/create or replace function public\.join_mission[\s\S]*?end \$\$;/i)?.[0] || ''
+  assert.match(join, /if not v_participant_found then[\s\S]*?not v_session\.joining_open[\s\S]*?v_callsign=any\(public\.mission_callsigns\(\)\)[\s\S]*?insert into public\.mission_participants/i)
+  const reconnect = join.match(/elsif v_participant\.status<>'removed' then[\s\S]*?else/i)?.[0] || ''
+  assert.match(reconnect, /set status='connected',last_seen_at=pg_catalog\.now\(\)/)
+  assert.doesNotMatch(reconnect, /callsign\s*=/)
+  assert.match(join, /else[\s\S]*?not v_session\.joining_open[\s\S]*?v_callsign=any\(public\.mission_callsigns\(\)\)[\s\S]*?set callsign=v_callsign,status='connected',ready_scene_id=null,last_seen_at=pg_catalog\.now\(\),removed_at=null,joined_at=pg_catalog\.now\(\)/i)
+  assert.match(join, /if v_session\.status='completed' then raise exception/)
+  assert.equal((join.match(/exception when unique_violation then raise exception using errcode='23505',message='CALLSIGN_TAKEN'/g) || []).length, 2)
+  assert.match(sql, /revoke all on function[\s\S]+from public,anon;/i)
+  assert.match(sql, /grant execute on function[\s\S]+to authenticated;/i)
+})
