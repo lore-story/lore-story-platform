@@ -35,3 +35,39 @@ html:has(.loreboard-mode),body:has(.loreboard-mode),#root:has(.loreboard-mode),h
 @keyframes launchPulse{0%{opacity:.9;transform:scale(.35)}100%{opacity:0;transform:scale(1.25)}}@keyframes pulse{50%{opacity:.45;transform:scale(.98)}}
 @media(max-width:1100px){.loreboard-mode.world-astra{padding:10px}.loreboard-topbar{grid-template-columns:minmax(170px,1fr) minmax(180px,auto) minmax(210px,1fr);gap:8px}.loreboard-controls button{font-size:0}.loreboard-controls button svg{width:19px}.save-status{font-size:10px}.command-grid{grid-template-columns:minmax(185px,23fr) minmax(360px,52fr) minmax(205px,25fr);gap:8px}.route-strip,.tools-column .board-widget{padding:10px}.route-items>button{font-size:14px}.story-grid-layout{grid-template-columns:minmax(0,1fr) 250px}.student-runtime-content{grid-template-columns:1fr 1fr}}
 @media(max-width:760px),(orientation:portrait) and (max-width:1100px){.student-runtime-content{grid-template-columns:1fr}.student-runtime .student-nova p,.student-runtime .student-task strong{font-size:clamp(18px,3vh,30px)}.student-runtime .primary{justify-self:stretch}.scene-brief{grid-template-columns:1fr}}
+
+/* World-aware platform surfaces */
+.platform[class*="world-"]{background:var(--world-void);color:var(--world-text)}
+.platform[class*="world-"]>aside{background:var(--world-panel-solid);color:var(--world-muted);box-shadow:var(--world-shadow)}
+.platform[class*="world-"]>aside nav button.active{background:color-mix(in srgb,var(--world-cyan) 22%,var(--world-panel-solid));color:var(--world-text);box-shadow:inset 3px 0 var(--world-cyan)}
+.platform[class*="world-"] .app-top,.platform[class*="world-"] .story-card,.platform[class*="world-"] .switch-panel{background:var(--world-panel);color:var(--world-text);border-color:color-mix(in srgb,var(--world-cyan) 30%,transparent)}
+.platform[class*="world-"] .view{color:var(--world-text)}
+.platform[class*="world-"] .page-head p,.platform[class*="world-"] .section-title p,.platform[class*="world-"] .story-info p{color:var(--world-muted)}
+.platform[class*="world-"] .active-banner{background:radial-gradient(circle at 82% 25%,color-mix(in srgb,var(--world-cyan) 55%,transparent),transparent 35%),linear-gradient(135deg,var(--world-panel-solid),var(--world-void));border:1px solid var(--world-cyan);box-shadow:var(--world-shadow)}
+.platform[class*="world-"] .btn.dark,.platform[class*="world-"] .btn.gold,.platform[class*="world-"] .story-info>button{background:var(--world-cyan);color:var(--world-void)}
+.platform[class*="world-"] .story-visual{background:radial-gradient(circle at 70% 30%,var(--accent),var(--world-panel-solid))}
+.platform[class*="world-"] .aside-world div span{color:var(--world-cyan)}
+.world-nebelmark{--world-motif:radial-gradient(circle at 80% 0,#52723b55,transparent 38%)}.world-aether{--world-motif:radial-gradient(circle at 80% 0,#78cfff44,transparent 40%)}.world-tiefsee{--world-motif:radial-gradient(circle at 75% 0,#35f0d044,transparent 42%)}
+.platform.world-nebelmark,.platform.world-aether,.platform.world-tiefsee{background-image:var(--world-motif)}
+.loreboard-mode[class*="world-"]{background:radial-gradient(circle at 50% 0,color-mix(in srgb,var(--world-cyan) 22%,transparent),transparent 38%),var(--world-void);color:var(--world-text)}
+.loreboard-mode[class*="world-"] .route-strip,.loreboard-mode[class*="world-"] .board-widget,.loreboard-mode[class*="world-"] .story-launcher{background:var(--world-panel);border:var(--world-border);box-shadow:var(--world-shadow)}
+
+/* Callsigns expose availability and selection without relying on colour alone. */
+.callsign-grid button{min-height:72px;flex-direction:column;gap:4px;border:2px solid #466273;background:#0a2030;transition:background .15s,border-color .15s,transform .15s}
+.callsign-grid button small{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--world-muted)}
+.callsign-grid button.taken{border-style:dashed;background:#101820;text-decoration:line-through;opacity:.62}
+.callsign-grid button.selected{border:3px solid var(--world-cyan);background:color-mix(in srgb,var(--world-cyan) 18%,var(--world-panel-solid));box-shadow:0 0 0 3px #35d8f333,0 8px 24px #0008;transform:translateY(-2px);text-decoration:none;opacity:1}
+.callsign-grid .selection-mark{display:flex;align-items:center;gap:4px;color:var(--world-text);font-weight:900}.callsign-grid .selection-mark svg{width:17px;height:17px;stroke-width:4}
+.console-toggle,.console-close{display:none!important}
+
+/* Dedicated iPad teacher layouts. */
+@media (min-width:768px) and (max-width:1366px){
+ .astra-lobby{gap:18px;padding:18px 22px}.astra-lobby>header{min-height:48px}.lobby-heading{padding:4px 0}.astra-lobby-grid{gap:18px}.astra-panel{padding:16px}.crew-network{display:flex;flex-direction:column;overflow:hidden}.crew-network .participant-table{min-height:0;overflow:auto}.launch-lobby{min-height:48px;margin-bottom:2px}
+ .participant-table>div{grid-template-columns:minmax(100px,1fr) auto auto}.participant-table time{display:none}.participant-table>div button{grid-column:1/-1}
+ .scene-copy{overflow:auto}.scene-copy p{line-height:1.45}.teacher-notes[open] .scene-brief{max-height:22vh;overflow:auto}.scene-actions button{min-height:44px}
+}
+@media (min-width:768px) and (max-width:1100px) and (orientation:portrait){
+ .astra-lobby{grid-template-rows:auto auto minmax(0,1fr) auto}.astra-lobby-grid{grid-template-columns:1fr;grid-template-rows:minmax(225px,.75fr) minmax(0,1.25fr)}.join-signal{display:grid;grid-template-columns:auto 1fr 1fr;grid-template-rows:auto auto;align-content:center}.join-signal img{grid-row:1/3;width:min(190px,22vh);height:min(190px,22vh)}.join-signal>span,.join-signal>strong{grid-column:2/4}.join-signal button{align-self:end}.crew-network{overflow:hidden}
+ .astra-story{grid-template-rows:56px minmax(0,1fr)}.story-grid-layout{grid-template-columns:1fr}.scene-stage{grid-template-rows:minmax(220px,1fr) auto auto}.console-toggle{display:inline-flex!important;margin-left:auto}.astra-story .fullscreen-control{margin-left:0}.mission-console{display:none;position:fixed;z-index:70;inset:76px 18px 18px;padding:16px;overflow:auto;border:1px solid var(--world-cyan);border-radius:20px;background:var(--world-panel-solid);box-shadow:var(--world-shadow)}.mission-console.open{display:flex}.console-close{display:inline-flex!important;align-self:flex-end}.code-mini img{width:110px;height:110px}.scene-copy h1{font-size:clamp(28px,4vw,42px)}.nova-dialog p,.student-assignment p{font-size:clamp(17px,2.2vw,23px)}
+}
+@media (min-width:1101px) and (max-width:1366px) and (orientation:landscape){.story-grid-layout{grid-template-columns:minmax(0,1fr) 280px}.mission-console{gap:8px}.scene-copy h1{font-size:clamp(27px,3vw,40px)}}

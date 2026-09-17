@@ -15,6 +15,24 @@ export const WORLD_THEMES = Object.freeze({
       labels: { assistant: 'NOVA', lobby: 'MISSIONSBEREITSCHAFT · DOCK 07', start: 'Mission starten', feedback: 'Feedback-Archiv' },
     }),
   }),
+  nebelmark: Object.freeze({
+    id: 'nebelmark', name: 'Nebelmark', typography: { display: 'Inter, sans-serif', body: 'Inter, sans-serif' },
+    colors: { void: '#07130e', panel: '#10271de8', panelSolid: '#142d21', cyan: '#91d36b', orange: '#f2bf72', text: '#f4f7e9', muted: '#adc0a7', danger: '#ff8173' },
+    surfaces: { border: '1px solid #91d36b66', radius: '14px', shadow: '0 18px 70px #020905cc' },
+    symbols: { logo: 'NEBELMARK', assistant: 'MOIRA', world: '✶' },
+  }),
+  aether: Object.freeze({
+    id: 'aether', name: 'Aetherion', typography: { display: 'Inter, sans-serif', body: 'Inter, sans-serif' },
+    colors: { void: '#100b29', panel: '#22194be8', panelSolid: '#291f59', cyan: '#78cfff', orange: '#ffe8a3', text: '#fbf9ff', muted: '#c4bce5', danger: '#ff809f' },
+    surfaces: { border: '1px solid #78cfff66', radius: '18px', shadow: '0 20px 75px #08031dcc' },
+    symbols: { logo: 'AETHERION', assistant: 'LYRA', world: '◇' },
+  }),
+  tiefsee: Object.freeze({
+    id: 'tiefsee', name: 'Pelagia', typography: { display: 'Inter, sans-serif', body: 'Inter, sans-serif' },
+    colors: { void: '#021521', panel: '#062b3ae8', panelSolid: '#073747', cyan: '#35f0d0', orange: '#8cecff', text: '#efffff', muted: '#9fc9cf', danger: '#ff7889' },
+    surfaces: { border: '1px solid #35f0d066', radius: '20px', shadow: '0 22px 80px #001018dd' },
+    symbols: { logo: 'PELAGIA', assistant: 'LUMA', world: '◉' },
+  }),
 })
 
 export const getWorldTheme = id => WORLD_THEMES[id] || null
@@ -22,5 +40,6 @@ export const getMissionPackage = storySlug => { const theme = Object.values(WORL
 export const themeVariables = theme => theme ? {
   '--world-void': theme.colors.void, '--world-panel': theme.colors.panel, '--world-panel-solid': theme.colors.panelSolid,
   '--world-cyan': theme.colors.cyan, '--world-orange': theme.colors.orange, '--world-text': theme.colors.text,
-  '--world-muted': theme.colors.muted, '--world-shadow': theme.surfaces.shadow, '--world-display': theme.typography.display,
+  '--world-muted': theme.colors.muted, '--world-danger': theme.colors.danger, '--world-border': theme.surfaces.border,
+  '--world-radius': theme.surfaces.radius, '--world-shadow': theme.surfaces.shadow, '--world-display': theme.typography.display,
 } : {}

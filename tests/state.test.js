@@ -182,3 +182,15 @@ test('cloud saves are user-bound, revision checked, and keep the local fallback 
   const update = cloud.calls.find(call => call.operation === 'update')
   assert.deepEqual(update.filters, { id: 'board', user_id: 'u1', updated_at: '2026-01-01T00:00:00Z' })
 })
+
+test('all four worlds provide complete visual theme contracts', async () => {
+  const { WORLD_THEMES, themeVariables } = await import('../src/worldThemes.js')
+  assert.deepEqual(Object.keys(WORLD_THEMES), ['astra', 'nebelmark', 'aether', 'tiefsee'])
+  for (const theme of Object.values(WORLD_THEMES)) {
+    assert.ok(theme.colors.void && theme.colors.panel && theme.colors.panelSolid)
+    assert.ok(theme.colors.cyan && theme.colors.orange && theme.colors.text && theme.colors.muted)
+    assert.ok(theme.surfaces.border && theme.surfaces.radius && theme.surfaces.shadow)
+    assert.ok(theme.symbols.logo && theme.symbols.assistant && theme.symbols.world)
+    assert.equal(themeVariables(theme)['--world-cyan'], theme.colors.cyan)
+  }
+})
