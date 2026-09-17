@@ -42,4 +42,6 @@ export const themeVariables = theme => theme ? {
   '--world-cyan': theme.colors.cyan, '--world-orange': theme.colors.orange, '--world-text': theme.colors.text,
   '--world-muted': theme.colors.muted, '--world-danger': theme.colors.danger, '--world-border': theme.surfaces.border,
   '--world-radius': theme.surfaces.radius, '--world-shadow': theme.surfaces.shadow, '--world-display': theme.typography.display,
+  '--world-accent': theme.colors.cyan, '--world-accent-soft': `color-mix(in srgb, ${theme.colors.cyan} 18%, transparent)`,
+  '--world-surface': theme.colors.panel, '--world-surface-elevated': theme.colors.panelSolid, '--world-text-mute': theme.colors.muted,
 } : {}
