@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { addStoryToFundus, DEFAULT_MATERIALS, DEFAULT_STATE, DEFAULT_TIMER, readMaterials, readState, restoreTimer, timerRemaining } from '../src/state.js'
-import { createLocalLoreboardRepository, LOREBOARD_STORAGE_KEY, MAX_ASSIGNMENT_LENGTH, MAX_MATERIALS } from '../src/loreboardRepository.js'
+import { createLocalLoreboardRepository, LOREBOARD_STORAGE_KEY, MAX_ASSIGNMENT_LENGTH, MAX_ASSIGNMENT_LINES, MAX_MATERIALS } from '../src/loreboardRepository.js'
 
 test('starts with a usable demo story when storage is empty', () => {
   const state = readState({ getItem: () => null })
@@ -76,6 +76,14 @@ test('preserves intentional assignment line breaks and blank lines', async () =>
   const repository = createLocalLoreboardRepository(storage)
   await repository.save({ ...DEFAULT_LOREBOARD_STATE, assignment })
   assert.equal((await repository.load()).assignment, assignment)
+})
+
+test('constrains assignments to the presentable number of lines', async () => {
+  const repository = createLocalLoreboardRepository(memoryStorage())
+  const assignment = Array.from({ length: MAX_ASSIGNMENT_LINES + 2 }, (_, index) => `Zeile ${index + 1}`).join('\n')
+  const saved = await repository.save({ ...DEFAULT_LOREBOARD_STATE, assignment })
+  assert.equal(saved.assignment.split('\n').length, MAX_ASSIGNMENT_LINES)
+  assert.equal(saved.assignment.endsWith(`Zeile ${MAX_ASSIGNMENT_LINES}`), true)
 })
 
 test('the asynchronous Loreboard repository saves and restores the complete board state', async () => {
