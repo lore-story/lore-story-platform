@@ -281,6 +281,8 @@ try {
       const assignment = document.querySelector('.assignment-display')
       const assignmentLabel = document.querySelector('.assignment-card .widget-title span')
       const materialLabel = document.querySelector('.materials-widget .widget-title span')
+      const materialEntry = document.querySelector('.material-list li')
+      const media = document.querySelector('.assignment-media')
       return {
         cardRatio: card.getBoundingClientRect().height / stage.getBoundingClientRect().height,
         assignmentFontSize: parseFloat(getComputedStyle(assignment).fontSize),
@@ -288,13 +290,20 @@ try {
         cardOverflow: card.scrollHeight > card.clientHeight || card.scrollWidth > card.clientWidth,
         assignmentLabelSize: parseFloat(getComputedStyle(assignmentLabel).fontSize),
         materialLabelSize: parseFloat(getComputedStyle(materialLabel).fontSize),
+        materialEntrySize: parseFloat(getComputedStyle(materialEntry).fontSize),
+        assignmentOverflowY: getComputedStyle(assignment).overflowY,
+        mediaBackgroundSize: getComputedStyle(media).backgroundSize,
       }
     })
-    assert.ok(layout.assignmentLabelSize > 11 && layout.materialLabelSize > 11)
-    assert.ok(layout.assignmentFontSize <= 32)
+    assert.ok(layout.assignmentLabelSize >= 14 && layout.materialLabelSize >= 14)
+    assert.ok(layout.materialEntrySize >= 14)
+    assert.ok(layout.assignmentFontSize <= 24)
     assert.equal(layout.assignmentOverflow, false)
     assert.equal(layout.cardOverflow, false)
-    assert.ok(layout.cardRatio >= (viewport.width > 1100 ? 0.5 : 0.48))
+    assert.notEqual(layout.assignmentOverflowY, 'auto')
+    assert.notEqual(layout.assignmentOverflowY, 'scroll')
+    assert.equal(layout.mediaBackgroundSize, 'contain')
+    assert.ok(layout.cardRatio <= 0.51)
     await projector.screenshot({ path: `artifacts/loreboard-${viewport.width}x${viewport.height}.png` })
   }
 
