@@ -7,12 +7,23 @@ export const ACCENTS = ['#35d8f3', '#ff9d3b', '#7fc69f', '#ad96e5']
 export const MEDIA_BUCKET = 'mission-draft-media'
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+export const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm']
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+
+export function validateMediaFile(file) {
+  if (!file) return 'Bitte wähle eine Datei.'
+  if (ACCEPTED_IMAGE_TYPES.includes(file.type)) return file.size > MAX_IMAGE_BYTES ? 'Das Bild darf höchstens 10 MB groß sein.' : ''
+  if (ACCEPTED_VIDEO_TYPES.includes(file.type)) return file.size > MAX_VIDEO_BYTES ? 'Das Video darf höchstens 100 MB groß sein.' : ''
+  return 'Bitte wähle eine JPEG-, PNG-, WebP-, MP4- oder WebM-Datei.'
+}
 
 export function validateImageFile(file) {
   if (!file || !ACCEPTED_IMAGE_TYPES.includes(file.type)) return 'Bitte wähle eine JPEG-, PNG- oder WebP-Datei.'
   if (file.size > MAX_IMAGE_BYTES) return 'Das Bild darf höchstens 10 MB groß sein.'
   return ''
 }
+
+export function normalizeMediaPresentation(media={}) { return { fit:'cover',positionX:50,positionY:50,zoom:1,autoplay:false,loop:false,playback:'manual',muted:true,...media } }
 
 export function changeSceneType(scene, sceneType) {
   if (!SCENE_TYPES[sceneType]) return scene
@@ -21,7 +32,7 @@ export function changeSceneType(scene, sceneType) {
 
 export const createScene = (position = 0, type = 'narrative') => ({
   id: globalThis.crypto.randomUUID(), position, title: `Szene ${position + 1}`, scene_type: type, layout_template: 'text',
-  content: { message: '', speaker: '', assignment: '', material: '', socialForm: '', time: '', help: '', readiness: '', media: { kind: 'external-url', url: '', alt: '' } },
+  content: { message: '', speaker: '', assignment: '', material: '', socialForm: '', time: '', help: '', readiness: '', media: normalizeMediaPresentation({ kind: 'external-url', url: '', alt: '', type:'image' }) },
   settings: { accent: ACCENTS[0], textAlign: 'left', dimming: 'medium', showOptional: true, manualContinue: false },
 })
 
