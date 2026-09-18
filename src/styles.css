@@ -124,3 +124,27 @@ html:has(.loreboard-mode),body:has(.loreboard-mode),#root:has(.loreboard-mode),h
 body:has(.test-run){overflow:hidden}body:has(.test-run) .platform>aside{visibility:hidden}
 @media(max-width:700px){.mission-stage-frame{aspect-ratio:16/9}.test-run>header,.test-run>footer{min-height:54px;padding:6px 10px}.test-run>header span small{display:none}.test-run>section .mission-stage-frame{width:min(100%,calc((100dvh - 150px) * 16 / 9))}}
 @media(prefers-reduced-motion:reduce){.spin{animation:none}.mission-media-viewport img,.mission-media-viewport video{transition:none}}
+
+/* Mission stage layout contract: layout templates own the grid for every scene type. */
+.mission-stage .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.mission-stage.scene-layout-text .mission-stage-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.mission-stage.scene-layout-media .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,2.15fr)}
+.mission-stage.scene-layout-text figure,.mission-stage.scene-layout-split figure,.mission-stage.scene-layout-media figure{display:flex;position:relative;inset:auto;z-index:auto;opacity:1;border:1px solid var(--mission-border);border-radius:clamp(8px,1.2cqw,18px)}
+.mission-stage.scene-layout-text figure,.mission-stage.scene-layout-split figure,.mission-stage.scene-layout-media figure{order:0}
+.mission-stage.scene-kind-narrative .mission-stage-grid,.mission-stage.scene-kind-assignment .mission-stage-grid,.mission-stage.scene-kind-transition .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.mission-stage.scene-kind-narrative.scene-layout-split .mission-stage-grid,.mission-stage.scene-kind-assignment.scene-layout-split .mission-stage-grid,.mission-stage.scene-kind-transition.scene-layout-split .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.mission-stage.scene-kind-narrative.scene-layout-text .mission-stage-grid,.mission-stage.scene-kind-assignment.scene-layout-text .mission-stage-grid,.mission-stage.scene-kind-transition.scene-layout-text .mission-stage-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.mission-stage.scene-kind-narrative.scene-layout-media .mission-stage-grid,.mission-stage.scene-kind-assignment.scene-layout-media .mission-stage-grid,.mission-stage.scene-kind-transition.scene-layout-media .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,2.15fr)}
+.mission-stage .scene-copy{box-sizing:border-box;width:100%;max-width:none;align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding:clamp(12px,2cqw,30px);color:var(--mission-text);background:var(--mission-surface-strong);border:1px solid var(--mission-border);border-radius:clamp(8px,1.2cqw,18px)}
+.mission-stage.scene-kind-assignment,.mission-stage.scene-kind-transition{color:var(--mission-text);background:radial-gradient(circle at 75% 18%,rgba(53,216,243,.16),transparent 34%),var(--mission-background)!important}
+.mission-stage.scene-kind-assignment .scene-copy{color:var(--mission-text);background:var(--mission-surface-strong)}
+.mission-stage.scene-kind-assignment header small,.mission-stage.scene-kind-transition header small{color:var(--mission-accent)}
+.mission-stage.scene-kind-transition .scene-copy{max-width:none;text-align:inherit;justify-self:stretch}
+.mission-stage.scene-kind-transition figure:not(.empty-media){position:relative;inset:auto;z-index:auto;opacity:1}
+.mission-stage.text-align-left header,.mission-stage.text-align-left .scene-copy,.mission-stage.text-align-left .assignment-extras{text-align:left;justify-content:flex-start}
+.mission-stage.text-align-center header,.mission-stage.text-align-center .scene-copy{text-align:center}.mission-stage.text-align-center .assignment-extras{justify-content:center}
+.mission-stage.text-align-right header,.mission-stage.text-align-right .scene-copy{text-align:right}.mission-stage.text-align-right .assignment-extras{justify-content:flex-end}
+.mission-media-viewport.is-editable video{pointer-events:none}
+.focus-controls{display:grid;gap:8px;margin:10px 0}.focus-controls label{font-size:12px}.focus-controls input{width:100%;box-sizing:border-box}
+.readiness-test{z-index:3}.test-run button:disabled,.mission-stage button:disabled{opacity:.5;cursor:not-allowed}
+@container(max-width:620px){.mission-stage.scene-layout-text .mission-stage-grid{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}.mission-stage.scene-layout-media .mission-stage-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.7fr)}}

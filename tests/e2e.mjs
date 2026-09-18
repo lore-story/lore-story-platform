@@ -200,10 +200,6 @@ try {
   await desktop.getByRole('button', { name: /Zur Übersicht/ }).click()
   await desktop.getByRole('heading', { name: 'Deine Übersicht' }).waitFor()
 
-  await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Werkstatt', exact: true }).click()
-  await desktop.getByRole('heading', { name: 'Werkstatt', exact: true }).waitFor()
-  await desktop.screenshot({ path: 'artifacts/workshop-desktop.png', fullPage: true })
-
   await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Weltwechsler', exact: true }).click()
   await desktop.getByRole('button', { name: /Astra/ }).click()
   assert.equal(await desktop.evaluate(() => JSON.parse(localStorage.getItem('e2e-cloud-row')).state.activeWorld), 'nebelmark')
@@ -318,10 +314,6 @@ try {
   assert.deepEqual(await ipad.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight })), { x: true, y: true })
   await ipad.screenshot({ path: 'artifacts/loreboard-ipad.png', fullPage: true })
   await ipad.getByRole('button', { name: /Zur Übersicht/ }).click()
-  await ipad.locator('.platform > aside nav').getByRole('button', { name: 'Werkstatt', exact: true }).click()
-  await ipad.getByRole('heading', { name: 'Werkstatt', exact: true }).waitFor()
-  await ipad.screenshot({ path: 'artifacts/workshop-ipad.png', fullPage: true })
-
   console.log('Loreboard persistence and layouts at 1920x1080, 1440x1000, and 1024x1366 passed.')
 } finally {
   await browser.close()

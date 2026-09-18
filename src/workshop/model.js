@@ -23,7 +23,10 @@ export function validateImageFile(file) {
   return ''
 }
 
-export function normalizeMediaPresentation(media={}) { return { fit:'cover',positionX:50,positionY:50,zoom:1,autoplay:false,loop:false,playback:'manual',muted:true,...media } }
+export function normalizeMediaPresentation(media={}) {
+  const normalized={ fit:'cover',positionX:50,positionY:50,zoom:1,autoplay:false,loop:false,playback:'manual',muted:true,...media }
+  return { ...normalized,fit:normalized.fit==='contain'?'contain':'cover',positionX:Math.max(0,Math.min(100,Number(normalized.positionX)||0)),positionY:Math.max(0,Math.min(100,Number(normalized.positionY)||0)),zoom:Math.max(1,Math.min(2,Number(normalized.zoom)||1)) }
+}
 
 export function changeSceneType(scene, sceneType) {
   if (!SCENE_TYPES[sceneType]) return scene
