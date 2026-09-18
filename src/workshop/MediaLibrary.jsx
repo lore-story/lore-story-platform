@@ -1,0 +1,3 @@
+export default function MediaLibrary({ items, usedPaths, onUse, onDelete }) {
+  return <div className="media-library"><h3>Meine Medien</h3>{items.length===0?<small>Noch keine Bilder hochgeladen.</small>:<div>{items.map(item=><article key={item.id}><img src={item.url} alt=""/><span><strong>{item.title||item.file_name}</strong><small>{new Intl.DateTimeFormat('de-DE',{dateStyle:'medium'}).format(new Date(item.created_at))}</small>{usedPaths.has(item.storage_path)&&<small>Wird in einer Szene verwendet</small>}</span><button type="button" onClick={()=>onUse(item)}>Verwenden</button><button type="button" onClick={()=>onDelete(item)}>Löschen</button></article>)}</div>}</div>
+}

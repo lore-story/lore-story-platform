@@ -1,18 +1,12 @@
-import { ACCENTS, LAYOUTS, SCENE_TYPES } from './model'
-
-export default function PropertiesPanel({ scene, onChange }) {
-  const update = patch => onChange({ ...scene, ...patch })
-  const setting = patch => update({ settings: { ...scene.settings, ...patch } })
-  const content = patch => update({ content: { ...scene.content, ...patch } })
-  const media = scene.content.media || { kind: 'external-url', url: '', alt: '' }
-  return <aside className="workshop-properties" aria-label="Szeneneigenschaften"><h2>Eigenschaften</h2>
-    <label>Szenentyp<select value={scene.scene_type} onChange={event => update({ scene_type: event.target.value })}>{Object.entries(SCENE_TYPES).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-    <fieldset><legend>Layoutvorlage</legend>{Object.entries(LAYOUTS).map(([value,label])=><label className="radio-tile" key={value}><input type="radio" name="layout" checked={scene.layout_template === value} onChange={() => update({ layout_template: value })}/>{label}</label>)}</fieldset>
-    <fieldset><legend>Akzentfarbe</legend><div className="accent-palette">{ACCENTS.map(value=><button aria-label={`Akzentfarbe ${value}`} aria-pressed={scene.settings.accent === value} type="button" key={value} style={{ background: value }} onClick={() => setting({ accent: value })}/>)}</div></fieldset>
-    <label>Textausrichtung<select value={scene.settings.textAlign} onChange={event => setting({ textAlign: event.target.value })}><option value="left">Links</option><option value="center">Zentriert</option></select></label>
-    <label>Hintergrund<select value={scene.settings.dimming} onChange={event => setting({ dimming: event.target.value })}><option value="light">Leicht</option><option value="medium">Mittel</option><option value="strong">Stark</option></select></label>
-    <label className="check-row"><input type="checkbox" checked={scene.settings.showOptional} onChange={event => setting({ showOptional: event.target.checked })}/> Optionale Felder anzeigen</label>
-    {scene.scene_type === 'transition' && <label className="check-row"><input type="checkbox" checked={scene.settings.manualContinue} onChange={event => setting({ manualContinue: event.target.checked })}/> Manuellen Weiter-Button zeigen</label>}
-    {scene.scene_type === 'narrative' && <fieldset><legend>Öffentliches Bild</legend><label>Medien-URL<input type="url" value={media.url} placeholder="https://…" onChange={event => content({ media: { ...media, url: event.target.value } })}/></label><label>Alternativtext<input value={media.alt} onChange={event => content({ media: { ...media, alt: event.target.value } })}/></label>{media.url && <button type="button" onClick={() => content({ media: { ...media, url: '', alt: '' } })}>Bild entfernen</button>}<small>Nur öffentliche HTTPS-Adressen. Upload folgt in einer späteren Stufe.</small></fieldset>}
-  </aside>
+import { ACCENTS } from './model'
+import SceneTypeSelector from './SceneTypeSelector'
+import LayoutSelector from './LayoutSelector'
+import MediaUpload from './MediaUpload'
+import MediaLibrary from './MediaLibrary'
+export default function PropertiesPanel({scene,onChange,storage,mediaItems,onMediaChanged,usedPaths,onClose}) {
+ const update=patch=>onChange({...scene,...patch}), setting=patch=>update({settings:{...scene.settings,...patch}}), content=patch=>update({content:{...scene.content,...patch}}), media=scene.content.media||{kind:'external-url',url:'',alt:''}
+ const use=item=>content({media:{kind:'storage',path:item.storage_path,alt:media.alt||item.title||item.file_name}})
+ const remove=()=>content({media:{kind:'external-url',url:'',alt:''}})
+ return <aside className="workshop-properties" aria-label="Szeneneigenschaften"><header><h2>Eigenschaften</h2>{onClose&&<button onClick={onClose} aria-label="Eigenschaften schließen">×</button>}</header><SceneTypeSelector scene={scene} onChange={onChange}/><LayoutSelector value={scene.layout_template} hasImage={!!(media.url||media.path)} onChange={layout_template=>update({layout_template})}/><label>Akzentfarbe<div className="accent-palette">{ACCENTS.map(value=><button aria-label={`Akzentfarbe ${value}`} aria-pressed={scene.settings.accent===value} type="button" key={value} style={{background:value}} onClick={()=>setting({accent:value})}/>)}</div></label>
+ <details><summary>Darstellung und Bild</summary><label>Textausrichtung<select value={scene.settings.textAlign} onChange={e=>setting({textAlign:e.target.value})}><option value="left">Links</option><option value="center">Zentriert</option></select></label><label>Hintergrund<select value={scene.settings.dimming} onChange={e=>setting({dimming:e.target.value})}><option value="light">Leicht</option><option value="medium">Mittel</option><option value="strong">Stark</option></select></label>{scene.scene_type==='narrative'&&<label>Sprecherposition<select value={scene.settings.speakerPosition||'left'} onChange={e=>setting({speakerPosition:e.target.value})}><option value="left">Links</option><option value="right">Rechts</option></select></label>}{scene.scene_type==='transition'&&<label className="check-row"><input type="checkbox" checked={scene.settings.manualContinue} onChange={e=>setting({manualContinue:e.target.checked})}/> Manuellen Weiter-Button zeigen</label>}<label>Alternativtext<input value={media.alt||''} onChange={e=>content({media:{...media,alt:e.target.value}})}/></label><MediaUpload storage={storage} onUploaded={item=>{onMediaChanged(item);use(item)}}/>{(media.url||media.path)&&<button type="button" onClick={remove}>Bild aus Szene entfernen</button>}<MediaLibrary items={mediaItems} usedPaths={usedPaths} onUse={use} onDelete={async item=>{if(window.confirm(`„${item.title||item.file_name}“ dauerhaft löschen?`)){await storage.remove(item);onMediaChanged()}}}/></details></aside>
 }

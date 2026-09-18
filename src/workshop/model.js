@@ -1,9 +1,23 @@
-export const PROJECT_SCHEMA_VERSION = 1
+export const PROJECT_SCHEMA_VERSION = 2
 export const PROJECT_STATUSES = Object.freeze({ draft: 'Entwurf', review: 'Bereit zur Prüfung', published: 'Veröffentlicht' })
 export const AUDIENCE_LEVELS = Object.freeze({ 'class-1-2': 'Klasse 1–2', 'class-3-6': 'Klasse 3–6', 'class-7-12': 'Klasse 7–12', custom: 'Benutzerdefiniert' })
 export const SCENE_TYPES = Object.freeze({ narrative: 'Erzählung', assignment: 'Lernauftrag', transition: 'Übergang' })
 export const LAYOUTS = Object.freeze({ text: 'Fokus: Text', media: 'Fokus: Medium', split: 'Geteilt: Text und Medium' })
 export const ACCENTS = ['#35d8f3', '#ff9d3b', '#7fc69f', '#ad96e5']
+export const MEDIA_BUCKET = 'mission-draft-media'
+export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+export function validateImageFile(file) {
+  if (!file || !ACCEPTED_IMAGE_TYPES.includes(file.type)) return 'Bitte wähle eine JPEG-, PNG- oder WebP-Datei.'
+  if (file.size > MAX_IMAGE_BYTES) return 'Das Bild darf höchstens 10 MB groß sein.'
+  return ''
+}
+
+export function changeSceneType(scene, sceneType) {
+  if (!SCENE_TYPES[sceneType]) return scene
+  return { ...scene, scene_type: sceneType, content: { ...createScene(0, sceneType).content, ...scene.content } }
+}
 
 export const createScene = (position = 0, type = 'narrative') => ({
   id: globalThis.crypto.randomUUID(), position, title: `Szene ${position + 1}`, scene_type: type, layout_template: 'text',
