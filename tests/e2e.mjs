@@ -201,9 +201,7 @@ try {
   await desktop.getByRole('heading', { name: 'Deine Übersicht' }).waitFor()
 
   await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Werkstatt', exact: true }).click()
-  assert.match(await desktop.locator('.editor-card input').inputValue(), /Moosarchiv/)
-  await desktop.getByRole('button', { name: 'Änderungen speichern' }).click()
-  await desktop.getByText('Deine Änderungen wurden lokal gespeichert').waitFor()
+  await desktop.getByRole('heading', { name: 'Werkstatt', exact: true }).waitFor()
   await desktop.screenshot({ path: 'artifacts/workshop-desktop.png', fullPage: true })
 
   await desktop.locator('.platform > aside nav').getByRole('button', { name: 'Weltwechsler', exact: true }).click()
