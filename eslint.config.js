@@ -1,9 +1,12 @@
+import react from 'eslint-plugin-react'
+
 export default [
   {
     ignores: ['dist/**'],
   },
   {
     files: ['src/**/*.{js,jsx}', 'tests/**/*.js'],
+    plugins: { react },
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -19,6 +22,7 @@ export default [
     rules: {
       'no-undef': 'error',
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'react/jsx-uses-vars': 'error',
     },
   },
 ]

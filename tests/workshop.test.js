@@ -60,20 +60,30 @@ test('stage two validates safe image formats and preserves scene data on type ch
 test('private media migration uses owner paths, RLS, and no public bucket', async () => {
   const { readFile } = await import('node:fs/promises')
   const sql = await readFile(new globalThis.URL('../supabase/migrations/202609180002_lore_workshop_stage_2_media.sql', import.meta.url), 'utf8')
-  assert.match(sql, /public, file_size_limit[\s\S]*false, 10485760/)
+  assert.match(sql, /values \('mission-draft-media', 'mission-draft-media', false, 10485760/)
   assert.match(sql, /storage_path like owner_id::text \|\| '\/%'/)
   assert.match(sql, /storage\.foldername\(name\).*auth\.uid\(\)::text/)
-  assert.doesNotMatch(sql, /to anon/)
+  assert.equal(sql.match(/create policy /g)?.length, 8)
+  assert.equal(sql.match(/coalesce\(\(auth\.jwt\(\)->>'is_anonymous'\)::boolean, false\) = false/g)?.length, 10)
+  const policies = [...sql.matchAll(/create policy "([^"]+)"[\s\S]*?;/g)]
+  assert.equal(policies.length, 8)
+  for (const [, name] of policies) {
+    assert.match(policies.find(match => match[1] === name)[0], /auth\.uid\(\)/, `${name} must remain owner-bound`)
+    assert.match(policies.find(match => match[1] === name)[0], /auth\.jwt\(\)->>'is_anonymous'/, `${name} must reject anonymous sign-ins`)
+  }
+  assert.doesNotMatch(sql, /to anon(?:ymous)?\b/)
 })
 
 test('stage two media migration is narrowly scoped and stores no expiring URLs', async () => {
   const { readFile } = await import('node:fs/promises')
   const sql = await readFile(new globalThis.URL('../supabase/migrations/202609180002_lore_workshop_stage_2_media.sql', import.meta.url), 'utf8')
   assert.match(sql, /values \('mission-draft-media', 'mission-draft-media', false/)
-  assert.match(sql, /for insert to authenticated with check \(owner_id=auth\.uid\(\)\)/)
-  assert.match(sql, /allowed_mime_types=array\['image\/jpeg','image\/png','image\/webp'\]/)
-  assert.match(sql, /file_size_limit=10485760/)
+  assert.match(sql, /for insert to authenticated[\s\S]*?with check \(owner_id = auth\.uid\(\)/)
+  assert.match(sql, /allowed_mime_types = array\['image\/jpeg','image\/png','image\/webp'\]/)
+  assert.match(sql, /file_size_limit = 10485760/)
   assert.doesNotMatch(sql, /signed_?url/i)
-  assert.doesNotMatch(sql, /update storage\.buckets(?![\s\S]*mission-draft-media)/i)
+  assert.match(sql, /create table if not exists public\.mission_media/)
+  assert.equal(sql.match(/drop policy if exists/g)?.length, 8)
+  assert.doesNotMatch(sql, /update\s+storage\.buckets/i)
   assert.doesNotMatch(sql, /bucket_id\s*<>|bucket_id\s+is\s+not/i)
 })

@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "@sparticuz/chromium": "^147.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
     "playwright": "^1.63.0",
     "wrangler": "^4.86.0"
   }
