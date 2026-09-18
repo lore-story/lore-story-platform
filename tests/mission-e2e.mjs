@@ -116,6 +116,8 @@ try {
   await teacher.getByRole('button', { name: 'Mission vorbereiten' }).click()
   await teacher.getByText('ASTR001', { exact: true }).waitFor()
   await assertAstraTypography(teacher, '.astra-lobby', '.lobby-heading h1')
+  assert.equal(await teacher.getByText('0 Crewmitglieder', { exact: true }).isVisible(), true)
+  assert.equal(await teacher.getByRole('button', { name: 'Mission starten' }).isEnabled(), true)
   for (const viewport of [{width:1024,height:1366},{width:1366,height:1024},{width:1180,height:820},{width:768,height:1024}]) {
     await teacher.setViewportSize(viewport)
     assert.equal(await teacher.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth), true)
