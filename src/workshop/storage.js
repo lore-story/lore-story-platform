@@ -1,4 +1,4 @@
-import { MEDIA_BUCKET, validateImageFile } from './model'
+import { MEDIA_BUCKET, validateMediaFile } from './model'
 
 const safeName = name => name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-')
 export function createMissionMediaStorage(supabase, userId) {
@@ -11,7 +11,7 @@ export function createMissionMediaStorage(supabase, userId) {
     },
     async resolve(media) { return media?.kind === 'storage' && media.path ? signedUrl(media.path) : media?.url || '' },
     async upload(file, title = file.name, onProgress = () => {}) {
-      const invalid = validateImageFile(file); if (invalid) throw new Error(invalid)
+      const invalid = validateMediaFile(file); if (invalid) throw new Error(invalid)
       const path = `${userId}/${globalThis.crypto.randomUUID()}-${safeName(file.name)}`
       onProgress(10)
       const result = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { contentType: file.type, upsert: false })
