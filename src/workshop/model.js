@@ -33,9 +33,14 @@ export function changeSceneType(scene, sceneType) {
   return { ...scene, scene_type: sceneType, content: { ...createScene(0, sceneType).content, ...scene.content } }
 }
 
+export const normalizeAssignmentSteps = content => {
+  const steps=Array.isArray(content?.steps)?content.steps.filter(step=>typeof step==='string'):[]
+  return steps.length?steps:[content?.assignment||'']
+}
+
 export const createScene = (position = 0, type = 'narrative') => ({
   id: globalThis.crypto.randomUUID(), position, title: `Szene ${position + 1}`, scene_type: type, layout_template: 'text',
-  content: { message: '', speaker: '', assignment: '', material: '', socialForm: '', time: '', help: '', readiness: '', media: normalizeMediaPresentation({ kind: 'external-url', url: '', alt: '', type:'image' }) },
+  content: { message: '', speaker: '', assignment: '', assignmentStepsEnabled: false, steps: [''], stepDisplay: 'current', material: '', socialForm: '', time: '', help: '', readiness: '', media: normalizeMediaPresentation({ kind: 'external-url', url: '', alt: '', type:'image' }) },
   settings: { accent: ACCENTS[0], textAlign: 'left', dimming: 'medium', showOptional: true, manualContinue: false },
 })
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImageOff, LoaderCircle } from 'lucide-react'
-import { SCENE_TYPES, normalizeMediaPresentation } from './model'
+import { ArrowLeft, ArrowRight, ImageOff, LoaderCircle } from 'lucide-react'
+import { SCENE_TYPES, normalizeAssignmentSteps, normalizeMediaPresentation } from './model'
 import { worldTokenStyle } from './worldTokens'
 
 export function MissionMedia({media,resolveMedia,editable=false,onMediaChange=()=>{}}) {
@@ -22,15 +22,15 @@ function Video({media,...props}) {
  return <video ref={ref} {...props} aria-label={media.alt||'Szenenvideo'} controls={media.playback==='manual'} autoPlay={media.autoplay&&!reduced} loop={media.loop} muted={media.autoplay||media.muted} playsInline poster={media.poster||undefined}/>
 }
 
-export default function MissionStage({scene,worldId='astra',resolveMedia,onContinue,continueDisabled=false,editableMedia=false,onMediaChange}) {
+export default function MissionStage({scene,worldId='astra',resolveMedia,onContinue,continueDisabled=false,editableMedia=false,onMediaChange,currentStep=0,onStepChange=()=>{}}) {
  const key=scene.scene_type==='assignment'?'assignment':'message', media=scene.content.media, hasMedia=media?.url||media?.path
+ const stepped=scene.scene_type==='assignment'&&scene.content.assignmentStepsEnabled, steps=normalizeAssignmentSteps(scene.content), step=Math.min(currentStep,steps.length-1)
  return <div className="mission-stage-frame" data-testid="mission-stage-frame"><article className={`mission-stage scene-kind-${scene.scene_type} scene-layout-${scene.layout_template} text-align-${scene.settings.textAlign||'left'}`} style={worldTokenStyle(worldId)} data-testid="mission-stage" data-scene-structure={scene.scene_type} data-layout={scene.layout_template}>
   <header><small>{SCENE_TYPES[scene.scene_type]}</small><h2>{scene.title}</h2></header>
   <div className="mission-stage-grid"><section className="scene-copy">
-   {scene.scene_type==='narrative'&&scene.content.speaker&&<strong className="speaker">{scene.content.speaker}</strong>}
-   <p className="scene-primary">{scene.content[key]||'Noch kein Inhalt'}</p>
+   {scene.content.speaker?.trim()&&<strong className="speaker">{scene.content.speaker}</strong>}
+   {stepped?<div className={`assignment-steps step-display-${scene.content.stepDisplay==='all'?'all':'current'}`}><small>Schritt {step+1} von {steps.length}</small>{scene.content.stepDisplay==='all'?<ol>{steps.map((text,index)=><li className={index===step?'active':''} key={index}>{text}</li>)}</ol>:<p className="scene-primary">{steps[step]||'Noch kein Inhalt'}</p>}<nav aria-label="Arbeitsschritte"><button type="button" aria-label="Vorheriger Arbeitsschritt" disabled={step===0} onClick={()=>onStepChange(step-1)}><ArrowLeft/></button><button type="button" aria-label="Nächster Arbeitsschritt" disabled={step===steps.length-1} onClick={()=>onStepChange(step+1)}><ArrowRight/></button></nav></div>:<p className="scene-primary">{scene.content[key]||'Noch kein Inhalt'}</p>}
    {scene.scene_type==='assignment'&&<div className="assignment-extras">{['material','socialForm','time','help'].map(field=>scene.content[field]&&<span key={field}>{scene.content[field]}</span>)}</div>}
-   {scene.scene_type==='transition'&&scene.content.readiness&&<strong className="readiness">{scene.content.readiness}</strong>}
   </section><figure className={!hasMedia?'empty-media':''}><MissionMedia media={media} resolveMedia={resolveMedia} editable={editableMedia} onMediaChange={onMediaChange}/>{scene.content.caption&&<figcaption>{scene.content.caption}</figcaption>}</figure></div>
   {scene.scene_type==='transition'&&scene.settings.manualContinue&&<button className="scene-continue" type="button" disabled={continueDisabled} onClick={onContinue}>Weiter</button>}
  </article></div>
