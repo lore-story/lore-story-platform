@@ -45,7 +45,7 @@ test('focus metadata applies to image and video with fit, position, zoom and tra
 test('transition readiness reuses the existing content field and blocks navigation until ready', () => {
   const panel=fs.readFileSync(new URL('../src/workshop/PropertiesPanel.jsx',import.meta.url),'utf8')
   const run=fs.readFileSync(new URL('../src/workshop/TestRun.jsx',import.meta.url),'utf8')
-  assert.match(panel,/Bereit machen/);assert.match(panel,/content\.readiness/)
+  assert.match(panel,/Bereitschaft erforderlich/);assert.match(panel,/content\.readiness/)
   assert.match(run,/readinessRequired/);assert.match(run,/disabled=\{blocked\}/)
 })
 
