@@ -29,13 +29,27 @@ test('speaker is shared by all scene types and empty values render no node',()=>
  assert.match(stage,/scene\.content\.speaker\?\.trim\(\)&&/)
 })
 
-test('media accordion is closed by default, counted and explicitly opened by change action',()=>{
+test('properties use four accessible accordions with the requested defaults',()=>{
  const panel=read('src/workshop/PropertiesPanel.jsx')
- assert.match(panel,/useState\(false\)/)
- assert.match(panel,/Meine Medien · \{mediaItems\.length\}/)
+ for(const name of ['Inhalt','Medien','Werkzeuge','Medienbibliothek'])assert.match(panel,new RegExp(name))
+ assert.match(panel,/INITIAL_OPEN = \{ content: true, media: false, tools: false, library: false \}/)
+ assert.match(panel,/aria-expanded=\{open\}/);assert.match(panel,/aria-controls=\{panelId\}/);assert.match(panel,/aria-labelledby=\{buttonId\}/)
+ assert.match(panel,/Medienbibliothek · \$\{mediaItems\.length\}/)
  assert.match(panel,/Medium ändern/)
- assert.match(panel,/onClick=\{\(\)=>setMediaOpen\(true\)\}/)
- assert.match(panel,/Aktuelles Medium/)
+ assert.match(panel,/openOnly\('library'\)/)
+ assert.match(panel,/library:false,media:true/)
+})
+
+test('content, tools, video settings and library responsibilities stay separated',()=>{
+ const panel=read('src/workshop/PropertiesPanel.jsx')
+ const content=panel.slice(panel.indexOf('name="content"'),panel.indexOf('name="media"'))
+ const media=panel.slice(panel.indexOf('name="media"'),panel.indexOf('name="tools"'))
+ const tools=panel.slice(panel.indexOf('name="tools"'),panel.indexOf('name="library"'))
+ const library=panel.slice(panel.indexOf('name="library"'))
+ assert.match(content,/Arbeitsschritte/);assert.doesNotMatch(content,/Auftrag in Schritte gliedern/)
+ assert.match(tools,/Auftrag in Schritte gliedern/);assert.match(tools,/Bereitschaft erforderlich/);assert.match(panel,/const activeTools=/)
+ assert.match(media,/Videoeinstellungen/);assert.match(media,/Autoplay/);assert.doesNotMatch(library,/Videoeinstellungen|Autoplay|Loop aktivieren/)
+ assert.match(panel,/narrow&&next/)
 })
 
 test('stage grid and media viewport share a clipped fixed row',()=>{
@@ -43,4 +57,12 @@ test('stage grid and media viewport share a clipped fixed row',()=>{
  assert.match(css,/grid-auto-rows:minmax\(0,1fr\)/)
  assert.match(css,/\.mission-stage \.scene-copy,\.mission-stage figure\{height:100%;max-height:100%;min-height:0;overflow:hidden/)
  assert.match(css,/contain:layout paint/)
+})
+
+test('all shared stage surfaces use the world radius and clip transformed media',()=>{
+ const css=read('src/styles.css'), tokens=read('src/workshop/worldTokens.js')
+ assert.match(tokens,/radius: 'clamp/)
+ assert.match(css,/scene-kind-transition figure:not\(\.empty-media\)[^{]*\{[^}]*border-radius:var\(--mission-radius\)/)
+ assert.match(css,/\.mission-media-viewport\{isolation:isolate;clip-path:inset\(0 round var\(--mission-radius\)\)/)
+ assert.doesNotMatch(css,/scene-kind-transition figure:not\(\.empty-media\)[^{]*\{[^}]*border-radius:0/)
 })
